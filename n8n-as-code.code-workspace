@@ -1,0 +1,48 @@
+{
+  "folders": [
+    {
+      "path": ".",
+      "name": "n8n_AI_Agent (root)"
+    },
+    {
+      "path": "superpowers",
+      "name": "Superpowers (active development)"
+    }
+  ],
+  "settings": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/.git": true,
+      "**/dist": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/dist": true,
+      ".git": true
+    },
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.python",
+      "editor.formatOnSave": true
+    },
+    "[javascript]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.formatOnSave": true
+    },
+    "[markdown]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.formatOnSave": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "esbenp.prettier-vscode",
+      "ms-python.python",
+      "ms-vscode.makefile-tools",
+      "eamodio.gitlens",
+      "GitHub.copilot",
+      "GitHub.copilot-chat"
+    ]
+  }
+}

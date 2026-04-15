@@ -1,35 +1,249 @@
-<div align="center">
+# N8N AI Agent Development Workspace
 
-# <img src="res/logo.png" alt="n8n-as-code" width="40" height="40"> n8n-as-code
+A multi-root VS Code workspace combining **n8n-as-code** (n8n workflow orchestration) with **Superpowers** (structured agent development framework) to build a powerful AI agent for n8n integrations and software development.
 
-### The AI Skill that gives your coding agent n8n superpowers.
+## 📁 Workspace Structure
 
-**GitOps · AI Skills · TypeScript Workflows · VS Code · Claude Code · OpenClaw**
+This is a **multi-root workspace** with two independent folders:
 
-[![CI](https://github.com/EtienneLescot/n8n-as-code/actions/workflows/ci.yml/badge.svg)](https://github.com/EtienneLescot/n8n-as-code/actions/workflows/ci.yml)
-[![Documentation](https://github.com/EtienneLescot/n8n-as-code/actions/workflows/docs.yml/badge.svg)](https://n8nascode.dev/)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/etienne-lescot.n8n-as-code?label=VS%20Code&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=etienne-lescot.n8n-as-code)
-[![Open VSX](https://img.shields.io/open-vsx/v/etienne-lescot/n8n-as-code?label=Open%20VSX&logo=eclipseide)](https://open-vsx.org/extension/etienne-lescot/n8n-as-code)
-[![npm: cli](https://img.shields.io/npm/v/@n8n-as-code/cli?label=cli&logo=npm)](https://www.npmjs.com/package/@n8n-as-code/cli)
-[![npm: skills](https://img.shields.io/npm/v/@n8n-as-code/skills?label=skills&logo=npm)](https://www.npmjs.com/package/@n8n-as-code/skills)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-Beta%20%2F%20Pending%20Review-orange)](https://n8nascode.dev/docs/usage/claude-plugin/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+### 1. **n8n_AI_Agent (root)**
+- **Purpose**: Core n8n-as-code environment for workflow management
+- **Contains**:
+  - n8n CLI tooling (`packages/cli`)
+  - Skills library (`packages/skills`)
+  - Documentation (`docs/`)
+  - Workflow sync folder (`workflows/`)
+  - MCP server integration
+- **Use this folder for**: 
+  - Initializing n8n connections (`n8nac init`)
+  - Syncing workflows (`n8nac pull`, `n8nac push`)
+  - Validating n8n configurations
+  - Accessing n8n node schemas and docs
 
-<br>
+### 2. **superpowers**
+- **Purpose**: Agent development framework (active development)
+- **Contains**:
+  - Skills library (will extend with n8n-specific skills)
+  - Agent workflows 
+  - Test infrastructure
+  - Development utilities
+- **Use this folder for**:
+  - Creating and refining n8n-related skills
+  - Developing agent capabilities
+  - Writing tests using TDD methodology
+  - Extending superpowers with n8n domain knowledge
 
-<img src="res/n8n-as-code.gif" alt="n8n-as-code demo" width="800">
+---
 
-<br>
+## 🚀 Getting Started
 
-**Your AI agent doesn't just _read_ about n8n. It _knows_ n8n.**<br>
-An installable ontology for n8n — every node, every property, every option, and the relationships between them — embedded at install time.<br>
-Zero external calls. Zero latency. Zero hallucination.
+### Open the Workspace
 
-<br>
+```bash
+# Option 1: From command line
+code /Users/miguelalves/Desktop/CidadeAI/n8n_AI_Agent/n8n-as-code.code-workspace
 
-[**📖 Documentation**](https://n8nascode.dev/) · [**🚀 Getting Started**](https://n8nascode.dev/docs/getting-started/) · [**🧠 AI Skills**](https://n8nascode.dev/docs/usage/skills/)
+# Option 2: In VS Code
+# File → Open Workspace from File → select n8n-as-code.code-workspace
+```
 
-</div>
+### Install Dependencies
+
+Both folders have independent dependencies. Install separately:
+
+```bash
+# Terminal in n8n_AI_Agent (root)
+npm install
+
+# Terminal in superpowers folder
+npm install
+```
+
+### Setup Environment
+
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Fill in your values:
+   - `N8N_HOST`: Your n8n instance URL
+   - `N8N_API_KEY`: API key from n8n Settings → API
+   - Optionally: Claude/OpenAI keys if using external LLMs
+
+3. **⚠️ Never commit `.env`** — it's in `.gitignore`
+
+---
+
+## 📋 Terminal Management
+
+VS Code allows independent terminals per folder:
+
+1. Open a new terminal (+ button in Terminal panel)
+2. Select which folder to open it in:
+   - **n8n_AI_Agent (root)** → for n8nac commands
+   - **superpowers** → for skill development
+
+Example workflow:
+```diff
+# Terminal 1: n8n_AI_Agent (root)
+$ cd /Users/miguelalves/Desktop/CidadeAI/n8n_AI_Agent
+$ node packages/cli/dist/index.js list
+
+# Terminal 2: superpowers
+$ cd /Users/miguelalves/Desktop/CidadeAI/n8n_AI_Agent/superpowers
+$ npm test -- skills/
+```
+
+---
+
+## 🔧 Folder-Specific Workflows
+
+### Working with n8n Workflows
+
+**Terminal: n8n_AI_Agent (root)**
+
+```bash
+# Initialize connection to n8n instance
+node packages/cli/dist/index.js init --yes \
+  --host http://localhost:5678 \
+  --api-key "$N8N_API_KEY" \
+  --project-name "Personal" \
+  --sync-folder workflows
+
+# List all workflows
+node packages/cli/dist/index.js list
+
+# Pull a workflow locally
+node packages/cli/dist/index.js pull <workflowId>
+
+# Verify workflow before pushing
+node packages/cli/dist/index.js verify <workflowId>
+
+# Push local workflow to n8n
+node packages/cli/dist/index.js push workflows/<filename>
+```
+
+### Developing Agent Skills
+
+**Terminal: superpowers**
+
+```bash
+# Create a new skill (TDD style)
+npm run create-skill -- --name "n8n-node-discovery"
+
+# Run skill tests
+npm test -- skills/
+
+# Lint and format
+npm run lint && npm run format
+
+# Build skills
+npm run build
+```
+
+---
+
+## 🛠️ Shared Configuration
+
+### VS Code Settings
+
+All settings are in `.vscode/settings.json`:
+- **Formatters**: Prettier (JS/TS/Markdown), Python
+- **Extensions**: Recommended in `.vscode/extensions.json`
+- **File exclusions**: node_modules, dist, .git, etc.
+
+### Overriding Settings per Folder
+
+If a specific folder needs different settings, create `.vscode/settings.json` inside that folder (e.g., `superpowers/.vscode/settings.json`). Folder-specific settings override workspace settings.
+
+---
+
+## 📦 Dependencies
+
+### n8n_AI_Agent
+- Node.js 24.14.1 (managed by nvm)
+- npm 11.11.0
+- TypeScript, CLI tools, MCP server
+
+### superpowers
+- Node.js (same as root)
+- Agent development framework
+- Test utilities, skill scaffolding
+
+---
+
+## 🔒 Security
+
+### Environment Variables
+
+Never commit sensitive data:
+- ✅ `.env.example` (template with placeholder values)
+- ❌ `.env` (your actual secrets — in `.gitignore`)
+- ❌ `.env.local` variants (in `.gitignore`)
+
+All `.env*` files starting with `.env.` and ending in `.local` are ignored.
+
+### API Keys
+
+Store in `.env`:
+- `N8N_API_KEY` — n8n instance API key
+- `ANTHROPIC_API_KEY` — Claude API key (if using)
+- `OPENAI_API_KEY` — OpenAI API key (if using)
+
+---
+
+## 📚 Documentation
+
+- **n8n-as-code**: [docs/](./docs/)
+- **Superpowers**: [superpowers/README.md](./superpowers/README.md)
+- **Getting Started**: [docs/docs/getting-started/](./docs/docs/getting-started/)
+
+---
+
+## 🚦 Development Workflow
+
+1. **Plan**: Use brainstorming skills in superpowers folder
+2. **Design**: Create detailed task plan
+3. **Develop**: Write tests first (TDD), then implementation
+4. **Validate**: 
+   - Test skills in isolation
+   - Validate against n8n schema (n8n_AI_Agent root)
+   - Push to n8n instance when ready
+5. **Iterate**: Refine based on validation results
+
+---
+
+## 🤝 Contributing
+
+1. Fork → Create branch → Make changes
+2. Follow TDD: write tests first
+3. Run linter and formatter
+4. Validate against n8n schema
+5. Submit PR with clear description
+
+---
+
+## ⚠️ Common Gotchas
+
+- **Wrong terminal folder?** Check the folder name in the terminal title (shows which workspace folder is active)
+- **Dependencies not installed?** Run `npm install` in the active folder
+- **`.env` file missing?** Copy `.env.example` to `.env` and fill in values
+- **n8nac command not found?** Make sure you're in the **n8n_AI_Agent (root)** folder, or use `node packages/cli/dist/index.js`
+
+---
+
+## 📖 References
+
+- [VS Code Multi-Root Workspaces](https://code.visualstudio.com/docs/editor/workspaces#_multiroot-workspaces)
+- [n8n-as-code Documentation](./docs/)
+- [Superpowers Framework](./superpowers/)
+- [Agent Skills Standard](https://agentskills.io/)
+
+---
+
+**Last updated**: April 15, 2026  
+**Workspace version**: 1.0
 
 ---
 
