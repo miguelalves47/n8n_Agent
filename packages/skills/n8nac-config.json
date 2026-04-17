@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "activeInstanceId": "instance-7a847dba",
+  "instances": [
+    {
+      "id": "instance-7a847dba",
+      "name": "trustscan.app.n8n.cloud",
+      "host": "https://trustscan.app.n8n.cloud",
+      "syncFolder": "workflows",
+      "projectId": "personal",
+      "projectName": "Personal",
+      "instanceIdentifier": "trustscan_cloud_user_77167e17_8a6d_4b1a_b3a4_b81a1893dbfa",
+      "workflowDir": "workflows/trustscan_cloud_user_77167e17_8a6d_4b1a_b3a4_b81a1893dbfa/personal",
+      "verification": {
+        "status": "verified",
+        "normalizedHost": "https://trustscan.app.n8n.cloud",
+        "userId": "77167e17-8a6d-4b1a-b3a4-b81a1893dbfa",
+        "lastCheckedAt": "2026-04-16T20:24:38.923Z"
+      }
+    }
+  ],
+  "host": "https://trustscan.app.n8n.cloud",
+  "syncFolder": "workflows",
+  "projectId": "personal",
+  "projectName": "Personal",
+  "instanceIdentifier": "trustscan_cloud_user_77167e17_8a6d_4b1a_b3a4_b81a1893dbfa",
+  "workflowDir": "workflows/trustscan_cloud_user_77167e17_8a6d_4b1a_b3a4_b81a1893dbfa/personal"
+}
