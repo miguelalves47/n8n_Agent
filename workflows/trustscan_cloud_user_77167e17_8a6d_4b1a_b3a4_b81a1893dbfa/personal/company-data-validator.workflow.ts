@@ -2,7 +2,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : Company Data Validator
-// Nodes   : 13  |  Connections: 14
+// Nodes   : 16  |  Connections: 16
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
@@ -20,6 +20,9 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // BuildReport                        code
 // RespondWithReport                  respondToWebhook
 // GenerateXlsx                       convertToFile
+// WhenClickingExecuteWorkflow        manualTrigger
+// GoogleDriveTrigger                 googleDriveTrigger         [creds]
+// DownloadFile                       googleDrive                [creds]
 //
 // ROUTING MAP
 // ──────────────────────────────────────────────────────────────────
@@ -38,6 +41,9 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 //                → MergeResults.in(1) (↩ loop)
 //           .out(1) → FormatNoUrl
 //              → MergeResults.in(2) (↩ loop)
+// GoogleDriveTrigger
+//    → DownloadFile
+//      → ParseExcel (↩ loop)
 // </workflow-map>
 
 // =====================================================================
@@ -84,11 +90,12 @@ export class CompanyDataValidatorWorkflow {
         name: 'Parse Excel',
         type: 'n8n-nodes-base.extractFromFile',
         version: 1.1,
-        position: [260, 0],
+        position: [480, 0],
     })
     ParseExcel = {
         operation: 'xlsx',
         binaryPropertyName: 'data',
+        options: {},
     };
 
     @node({
@@ -96,7 +103,7 @@ export class CompanyDataValidatorWorkflow {
         name: 'Normalize URL',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [520, 0],
+        position: [736, 0],
     })
     NormalizeUrl = {
         mode: 'runOnceForEachItem',
@@ -138,7 +145,7 @@ return {
         name: 'Validate Contacts',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [780, 0],
+        position: [992, 0],
     })
     ValidateContacts = {
         mode: 'runOnceForEachItem',
@@ -191,7 +198,7 @@ return {
         name: 'Has URL?',
         type: 'n8n-nodes-base.if',
         version: 2.3,
-        position: [1040, 0],
+        position: [1248, 0],
     })
     HasUrl = {
         conditions: {
@@ -212,6 +219,7 @@ return {
             ],
             combinator: 'and',
         },
+        options: {},
     };
 
     @node({
@@ -219,20 +227,19 @@ return {
         name: 'Check Website',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [1300, -100],
+        position: [1520, -96],
         onError: 'continueErrorOutput',
     })
     CheckWebsite = {
         method: 'HEAD',
         url: '={{ $json._normalized_url }}',
         options: {
-            timeout: 10000,
             redirect: {
                 redirect: {
-                    followRedirects: true,
                     maxRedirects: 5,
                 },
             },
+            timeout: 10000,
         },
     };
 
@@ -241,7 +248,7 @@ return {
         name: 'Format Success',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1560, -200],
+        position: [1776, -208],
     })
     FormatSuccess = {
         mode: 'runOnceForEachItem',
@@ -268,7 +275,7 @@ return {
         name: 'Format Error',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1560, 0],
+        position: [1776, 0],
     })
     FormatError = {
         mode: 'runOnceForEachItem',
@@ -303,7 +310,7 @@ return {
         name: 'Format No URL',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1300, 200],
+        position: [1520, 208],
     })
     FormatNoUrl = {
         mode: 'runOnceForEachItem',
@@ -328,10 +335,9 @@ return {
         name: 'Merge Results',
         type: 'n8n-nodes-base.merge',
         version: 3.2,
-        position: [1820, 0],
+        position: [2032, 0],
     })
     MergeResults = {
-        mode: 'append',
         numberInputs: 3,
     };
 
@@ -340,10 +346,9 @@ return {
         name: 'Build Report',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [2080, -200],
+        position: [2288, -208],
     })
     BuildReport = {
-        mode: 'runOnceForAllItems',
         jsCode: `const items = $input.all().map(i => i.json);
 const total = items.length;
 const exists = items.filter(i => i.website_status === 'exists').length;
@@ -379,7 +384,7 @@ return [{
         name: 'Respond With Report',
         type: 'n8n-nodes-base.respondToWebhook',
         version: 1.5,
-        position: [2340, -200],
+        position: [2560, -208],
     })
     RespondWithReport = {
         respondWith: 'allIncomingItems',
@@ -400,7 +405,7 @@ return [{
         name: 'Generate XLSX',
         type: 'n8n-nodes-base.convertToFile',
         version: 1.1,
-        position: [2080, 200],
+        position: [2288, 208],
     })
     GenerateXlsx = {
         operation: 'xlsx',
@@ -408,6 +413,57 @@ return [{
         options: {
             fileName: 'validation-report.xlsx',
         },
+    };
+
+    @node({
+        id: 'd00da349-c6a3-4627-840d-bebd51fb7498',
+        name: 'When clicking ‘Execute workflow’',
+        type: 'n8n-nodes-base.manualTrigger',
+        version: 1,
+        position: [-16, 256],
+    })
+    WhenClickingExecuteWorkflow = {};
+
+    @node({
+        id: 'bd86fa9a-342a-4274-85c9-223f6fc946e1',
+        name: 'Google Drive Trigger',
+        type: 'n8n-nodes-base.googleDriveTrigger',
+        version: 1,
+        position: [208, -240],
+        credentials: { googleDriveOAuth2Api: { id: 'X86AoRbLZx35cevh', name: 'Google Drive account' } },
+        alwaysOutputData: false,
+        executeOnce: false,
+        retryOnFail: false,
+    })
+    GoogleDriveTrigger = {
+        triggerOn: 'specificFile',
+        event: 'fileUpdated',
+        fileToWatch: {
+            __rl: true,
+            value: '1--llpu9MQcy81_6xJ5GIoJQjsRy4QT9nEPXF0_ckhCU',
+            mode: 'list',
+            cachedResultName: 'Cliente_BD_INPUT',
+            cachedResultUrl:
+                'https://docs.google.com/spreadsheets/d/1--llpu9MQcy81_6xJ5GIoJQjsRy4QT9nEPXF0_ckhCU/edit?usp=drivesdk',
+        },
+    };
+
+    @node({
+        id: 'f1445a76-dc02-413e-b280-bd175fa4672f',
+        name: 'Download File',
+        type: 'n8n-nodes-base.googleDrive',
+        version: 3,
+        position: [208, -80],
+        credentials: { googleDriveOAuth2Api: { id: 'X86AoRbLZx35cevh', name: 'Google Drive account' } },
+    })
+    DownloadFile = {
+        operation: 'download',
+        fileId: {
+            __rl: true,
+            mode: 'id',
+            value: '={{ $json.id }}',
+        },
+        options: {},
     };
 
     // =====================================================================
@@ -430,5 +486,7 @@ return [{
         this.MergeResults.out(0).to(this.BuildReport.in(0));
         this.MergeResults.out(0).to(this.GenerateXlsx.in(0));
         this.BuildReport.out(0).to(this.RespondWithReport.in(0));
+        this.GoogleDriveTrigger.out(0).to(this.DownloadFile.in(0));
+        this.DownloadFile.out(0).to(this.ParseExcel.in(0));
     }
 }
