@@ -2,7 +2,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : Company Data Validator
-// Nodes   : 16  |  Connections: 16
+// Nodes   : 22  |  Connections: 25
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
@@ -23,6 +23,12 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // WhenClickingExecuteWorkflow        manualTrigger
 // GoogleDriveTrigger                 googleDriveTrigger         [creds]
 // DownloadFile                       googleDrive                [creds]
+// Is405                              if
+// CheckWebsiteGet                    httpRequest                [onError→out(1)]
+// IncrementRetry                     code
+// ShouldRetry                        if
+// FormatSuccessGet                   code
+// WaitBeforeRetry                    wait
 //
 // ROUTING MAP
 // ──────────────────────────────────────────────────────────────────
@@ -37,10 +43,19 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 //                  → BuildReport
 //                    → RespondWithReport
 //                  → GenerateXlsx
-//             .out(1) → FormatError
-//                → MergeResults.in(1) (↩ loop)
+//             .out(1) → Is405
+//                → CheckWebsiteGet
+//                  → FormatSuccessGet
+//                    → MergeResults.in(1) (↩ loop)
+//                 .out(1) → IncrementRetry
+//                    → ShouldRetry
+//                      → WaitBeforeRetry
+//                        → CheckWebsite (↩ loop)
+//                     .out(1) → FormatError
+//                        → MergeResults.in(2) (↩ loop)
+//               .out(1) → IncrementRetry (↩ loop)
 //           .out(1) → FormatNoUrl
-//              → MergeResults.in(2) (↩ loop)
+//              → MergeResults.in(3) (↩ loop)
 // GoogleDriveTrigger
 //    → DownloadFile
 //      → ParseExcel (↩ loop)
@@ -233,13 +248,32 @@ return {
     CheckWebsite = {
         method: 'HEAD',
         url: '={{ $json._normalized_url }}',
+        sendHeaders: true,
+        specifyHeaders: 'keypair',
+        headerParameters: {
+            parameters: [
+                {
+                    name: 'User-Agent',
+                    value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                },
+                {
+                    name: 'Accept',
+                    value: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                },
+                {
+                    name: 'Accept-Language',
+                    value: 'pt-PT,pt;q=0.9,en;q=0.8',
+                },
+            ],
+        },
         options: {
+            allowUnauthorizedCerts: true,
             redirect: {
                 redirect: {
                     maxRedirects: 5,
                 },
             },
-            timeout: 10000,
+            timeout: 20000,
         },
     };
 
@@ -254,6 +288,8 @@ return {
         mode: 'runOnceForEachItem',
         jsCode: `const vc = $('Validate Contacts').item.json;
 const now = new Date().toISOString();
+let retryAttempts = 0;
+try { retryAttempts = $('Increment Retry').item.json._retry_count || 0; } catch(e) {}
 return {
   Entidade: vc.Entidade || '', NIPC: vc.NIPC || '', Nome: vc._company_name,
   Morada: vc.Morada || '', Localidade: vc.Localidade || '', CodPostal: vc.CodPostal || '',
@@ -265,7 +301,7 @@ return {
   email_valid: vc._email_valid, email_notes: vc._email_notes,
   phone_format_valid: vc._phone_valid, phone_notes: vc._phone_notes,
   fax_format_valid: vc._fax_valid, fax_notes: vc._fax_notes,
-  validation_timestamp: now, notes: '',
+  validation_timestamp: now, retry_attempts: retryAttempts, notes: '',
 };
 `,
     };
@@ -275,17 +311,25 @@ return {
         name: 'Format Error',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1776, 0],
+        position: [2288, 160],
     })
     FormatError = {
         mode: 'runOnceForEachItem',
         jsCode: `const vc = $('Validate Contacts').item.json;
 const now = new Date().toISOString();
 const errMsg = String($json.error?.message || $json.message || 'unknown error').toLowerCase();
+const retryAttempts = $json._retry_count || 0;
 let status = 'error';
-if (errMsg.includes('timeout') || errMsg.includes('timedout') || errMsg.includes('timed out')) {
+let notes = errMsg.substring(0, 200);
+let httpStatusCode = $json.statusCode || 0;
+if (errMsg.includes('403')) {
+  // Cloudflare/WAF detects n8n's cloud IP as a bot and blocks it
+  status = 'exists';
+  notes = "Cloudflare/WAF detects n8n's cloud IP as a bot and blocks it";
+  httpStatusCode = 403;
+} else if (errMsg.includes('timeout') || errMsg.includes('timedout') || errMsg.includes('timed out')) {
   status = 'timeout';
-} else if (errMsg.includes('enotfound') || errMsg.includes('getaddrinfo') || errMsg.includes('not found')) {
+} else if (errMsg.includes('enotfound') || errMsg.includes('getaddrinfo')) {
   status = 'not_found';
 } else if (errMsg.includes('econnrefused') || errMsg.includes('econnreset')) {
   status = 'connection_refused';
@@ -296,11 +340,11 @@ return {
   Concelho: vc.Concelho || '', Distrito: vc.Distrito || '',
   Telefone: vc.Telefone || '', Fax: vc.Fax || '', Email: vc.Email || '',
   Internet: vc.Internet || '', normalized_url: vc._normalized_url,
-  website_status: status, http_status_code: $json.statusCode || 0, redirect_url: '',
+  website_status: status, http_status_code: httpStatusCode, redirect_url: '',
   email_valid: vc._email_valid, email_notes: vc._email_notes,
   phone_format_valid: vc._phone_valid, phone_notes: vc._phone_notes,
   fax_format_valid: vc._fax_valid, fax_notes: vc._fax_notes,
-  validation_timestamp: now, notes: errMsg.substring(0, 200),
+  validation_timestamp: now, retry_attempts: retryAttempts, notes,
 };
 `,
     };
@@ -338,7 +382,7 @@ return {
         position: [2032, 0],
     })
     MergeResults = {
-        numberInputs: 3,
+        numberInputs: 4,
     };
 
     @node({
@@ -352,6 +396,7 @@ return {
         jsCode: `const items = $input.all().map(i => i.json);
 const total = items.length;
 const exists = items.filter(i => i.website_status === 'exists').length;
+const existsAfterRetry = items.filter(i => i.website_status === 'exists' && (i.retry_attempts || 0) > 0).length;
 const notFound = items.filter(i => i.website_status === 'not_found').length;
 const timeout = items.filter(i => i.website_status === 'timeout').length;
 const noUrl = items.filter(i => i.website_status === 'no_url').length;
@@ -367,7 +412,7 @@ return [{
   json: {
     summary: {
       total_companies: total,
-      website_validation: { exists, not_found: notFound, timeout, no_url: noUrl, errors },
+      website_validation: { exists, exists_after_retry: existsAfterRetry, not_found: notFound, timeout, no_url: noUrl, errors },
       contact_validation: {
         emails_valid: emailsValid, emails_invalid: emailsInvalid, emails_missing: emailsMissing,
         phones_valid: phonesValid, phones_invalid: phonesInvalid, phones_missing: phonesMissing,
@@ -466,6 +511,165 @@ return [{
         options: {},
     };
 
+    @node({
+        id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        name: 'Is 405?',
+        type: 'n8n-nodes-base.if',
+        version: 2.3,
+        position: [1776, 64],
+    })
+    Is405 = {
+        conditions: {
+            options: {
+                caseSensitive: true,
+                leftValue: '',
+            },
+            conditions: [
+                {
+                    id: '1',
+                    leftValue: '={{ ($json.error?.message || $json.message || "").toString() }}',
+                    rightValue: '405',
+                    operator: {
+                        type: 'string',
+                        operation: 'contains',
+                    },
+                },
+            ],
+            combinator: 'and',
+        },
+        options: {},
+    };
+
+    @node({
+        id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
+        name: 'Check Website GET',
+        type: 'n8n-nodes-base.httpRequest',
+        version: 4.4,
+        position: [2032, -320],
+        onError: 'continueErrorOutput',
+    })
+    CheckWebsiteGet = {
+        method: 'GET',
+        url: '={{ $json._normalized_url }}',
+        sendHeaders: true,
+        specifyHeaders: 'keypair',
+        headerParameters: {
+            parameters: [
+                {
+                    name: 'User-Agent',
+                    value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                },
+                {
+                    name: 'Accept',
+                    value: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                },
+                {
+                    name: 'Accept-Language',
+                    value: 'pt-PT,pt;q=0.9,en;q=0.8',
+                },
+            ],
+        },
+        options: {
+            allowUnauthorizedCerts: true,
+            redirect: {
+                redirect: {
+                    maxRedirects: 5,
+                },
+            },
+            timeout: 20000,
+        },
+    };
+
+    @node({
+        id: 'ee3ebd60-d132-44ad-8b98-2bea82ba1668',
+        name: 'Increment Retry',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [1776, 160],
+    })
+    IncrementRetry = {
+        mode: 'runOnceForEachItem',
+        jsCode: `const normalizedUrl = $json._normalized_url || $('Validate Contacts').item.json._normalized_url || '';
+const currentRetries = $json._retry_count || 0;
+return {
+  ...$json,
+  _normalized_url: normalizedUrl,
+  _retry_count: currentRetries + 1,
+};`,
+    };
+
+    @node({
+        id: '8b696cb1-f138-4cbf-86b8-c77969d1059c',
+        name: 'Should Retry?',
+        type: 'n8n-nodes-base.if',
+        version: 2.3,
+        position: [2032, 160],
+    })
+    ShouldRetry = {
+        conditions: {
+            options: {
+                caseSensitive: true,
+                leftValue: '',
+            },
+            conditions: [
+                {
+                    id: '1',
+                    leftValue: '={{ $json._retry_count }}',
+                    rightValue: 2,
+                    operator: {
+                        type: 'number',
+                        operation: 'lte',
+                    },
+                },
+            ],
+            combinator: 'and',
+        },
+        options: {},
+    };
+
+    @node({
+        id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
+        name: 'Format Success GET',
+        type: 'n8n-nodes-base.code',
+        version: 2,
+        position: [2288, -384],
+    })
+    FormatSuccessGet = {
+        mode: 'runOnceForEachItem',
+        jsCode: `const vc = $('Validate Contacts').item.json;
+const now = new Date().toISOString();
+let retryAttempts = 0;
+try { retryAttempts = $('Increment Retry').item.json._retry_count || 0; } catch(e) {}
+return {
+  Entidade: vc.Entidade || '', NIPC: vc.NIPC || '', Nome: vc._company_name,
+  Morada: vc.Morada || '', Localidade: vc.Localidade || '', CodPostal: vc.CodPostal || '',
+  Concelho: vc.Concelho || '', Distrito: vc.Distrito || '',
+  Telefone: vc.Telefone || '', Fax: vc.Fax || '', Email: vc.Email || '',
+  Internet: vc.Internet || '', normalized_url: vc._normalized_url,
+  website_status: 'exists', http_status_code: $json.statusCode || 200,
+  redirect_url: $json.redirectUrl || '',
+  email_valid: vc._email_valid, email_notes: vc._email_notes,
+  phone_format_valid: vc._phone_valid, phone_notes: vc._phone_notes,
+  fax_format_valid: vc._fax_valid, fax_notes: vc._fax_notes,
+  validation_timestamp: now, retry_attempts: retryAttempts, notes: '',
+};
+`,
+    };
+
+    @node({
+        id: 'b6ebf2b3-1535-4a1a-a41b-f46031c2fb25',
+        webhookId: '9d54976a-94d7-4124-808b-c4848705afbb',
+        name: 'Wait Before Retry',
+        type: 'n8n-nodes-base.wait',
+        version: 1.1,
+        position: [2032, 320],
+    })
+    WaitBeforeRetry = {
+        resume: 'timeInterval',
+        amount: 10,
+        unit: 'seconds',
+    };
+
     // =====================================================================
     // ROUTAGE ET CONNEXIONS
     // =====================================================================
@@ -479,10 +683,19 @@ return [{
         this.HasUrl.out(0).to(this.CheckWebsite.in(0));
         this.HasUrl.out(1).to(this.FormatNoUrl.in(0));
         this.CheckWebsite.out(0).to(this.FormatSuccess.in(0));
-        this.CheckWebsite.out(1).to(this.FormatError.in(0));
+        this.CheckWebsite.out(1).to(this.Is405.in(0));
+        this.Is405.out(0).to(this.CheckWebsiteGet.in(0));
+        this.Is405.out(1).to(this.IncrementRetry.in(0));
+        this.CheckWebsiteGet.out(0).to(this.FormatSuccessGet.in(0));
+        this.CheckWebsiteGet.out(1).to(this.IncrementRetry.in(0));
+        this.IncrementRetry.out(0).to(this.ShouldRetry.in(0));
+        this.ShouldRetry.out(0).to(this.WaitBeforeRetry.in(0));
+        this.ShouldRetry.out(1).to(this.FormatError.in(0));
+        this.WaitBeforeRetry.out(0).to(this.CheckWebsite.in(0));
         this.FormatSuccess.out(0).to(this.MergeResults.in(0));
-        this.FormatError.out(0).to(this.MergeResults.in(1));
-        this.FormatNoUrl.out(0).to(this.MergeResults.in(2));
+        this.FormatSuccessGet.out(0).to(this.MergeResults.in(1));
+        this.FormatError.out(0).to(this.MergeResults.in(2));
+        this.FormatNoUrl.out(0).to(this.MergeResults.in(3));
         this.MergeResults.out(0).to(this.BuildReport.in(0));
         this.MergeResults.out(0).to(this.GenerateXlsx.in(0));
         this.BuildReport.out(0).to(this.RespondWithReport.in(0));

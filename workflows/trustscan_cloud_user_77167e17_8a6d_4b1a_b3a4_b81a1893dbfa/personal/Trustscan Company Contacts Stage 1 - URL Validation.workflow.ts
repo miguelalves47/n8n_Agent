@@ -125,7 +125,7 @@ export class TrustscanCompanyContactsStage1UrlValidationWorkflow {
         name: 'Code "Sem URL"',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-2160, -416],
+        position: [-2112, -224],
         alwaysOutputData: true,
     })
     CodeSemUrl = {
@@ -160,7 +160,7 @@ return {
         name: 'INPUT · Ler Cliente_BD_INPUT',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-3264, -944],
+        position: [-3232, -848],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: false,
     })
@@ -195,7 +195,7 @@ return {
         name: 'INGEST · Normalizar + IDs (Run/Entity/Exec/URL)',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-3040, -944],
+        position: [-3008, -848],
         alwaysOutputData: true,
     })
     IngestNormalizarIdsRunEntityExecUrl = {
@@ -476,7 +476,7 @@ return {
         name: 'STATE · Upsert CONTROL_EXEC (INGESTED)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-2800, -1088],
+        position: [-2784, -992],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -639,7 +639,7 @@ return {
         name: 'AUDIT · Append URL_CHECKS (HTTP_OK)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-1744, -1376],
+        position: [-1664, -1376],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -675,7 +675,7 @@ return {
                 Request_method: 'HEAD',
                 Final_url: '={{ $json.final_url }}',
                 Network_error: '={{ $json.network_error }}',
-                Exec_key: '={{ $json.exec_key }}',
+                Exec_key: '=§ {{ $json.run_id }}',
             },
             matchingColumns: [],
             schema: [
@@ -801,7 +801,7 @@ return {
         name: 'STATE · Update CONTROL_EXEC (pós HTTP_OK)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-1552, -1376],
+        position: [-1440, -1376],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -963,7 +963,7 @@ return {
         name: 'AUDIT · Append URL_CHECKS (HTTP_ERR)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-880, -768],
+        position: [-768, -544],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -1124,7 +1124,7 @@ return {
         name: 'STATE · Update CONTROL_EXEC (pós HTTP_ERR)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-688, -768],
+        position: [-544, -544],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -1299,7 +1299,7 @@ return {
         name: 'AUDIT · Append URL_CHECKS (NO_URL)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-1936, -416],
+        position: [-1888, -224],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -1456,7 +1456,7 @@ return {
         name: 'STATE · Update CONTROL_EXEC (NO_URL)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-1712, -416],
+        position: [-1664, -224],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     StateUpdateControlExecNoUrl = {
@@ -1617,7 +1617,7 @@ return {
         name: 'STATE · Update CONTROL_EXEC (pós HTTP_OK)1',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-496, -960],
+        position: [-320, -736],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -1780,7 +1780,7 @@ return {
         name: 'AUDIT · Append URL_CHECKS (HTTP_OK) ',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-688, -960],
+        position: [-544, -736],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -1942,7 +1942,7 @@ return {
         name: 'Finalize 1',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-1360, -1376],
+        position: [-1216, -1376],
     })
     Finalize1 = {
         mode: 'runOnceForEachItem',
@@ -1976,7 +1976,7 @@ return {
         name: 'Finalize 2',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-336, -960],
+        position: [-96, -736],
     })
     Finalize2 = {
         mode: 'runOnceForEachItem',
@@ -1996,7 +1996,7 @@ return {
         name: 'Finalize 3',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-496, -768],
+        position: [-320, -544],
     })
     Finalize3 = {
         mode: 'runOnceForEachItem',
@@ -2011,7 +2011,7 @@ return $input.item;`,
         name: 'STATE · Upsert SNAPSHOT',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-2800, -800],
+        position: [-2784, -704],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -2051,9 +2051,20 @@ return $input.item;`,
                 Nome: '={{ $json.Nome }}',
                 NIPC: '={{ $json.NIPC }}',
                 Entidade: '={{ $json.Entidade }}',
+                Processed: '=',
             },
             matchingColumns: ['Exec_KEY'],
             schema: [
+                {
+                    id: 'Processed',
+                    displayName: 'Processed',
+                    required: false,
+                    defaultMatch: false,
+                    display: true,
+                    type: 'string',
+                    canBeUsedToMatch: true,
+                    removed: false,
+                },
                 {
                     id: 'Entidade',
                     displayName: 'Entidade',
@@ -2214,7 +2225,7 @@ return $input.item;`,
         name: 'Merge',
         type: 'n8n-nodes-base.merge',
         version: 3.2,
-        position: [-2576, -960],
+        position: [-2560, -864],
     })
     Merge = {
         mode: 'combineBySql',
@@ -2228,7 +2239,7 @@ return $input.item;`,
         name: 'When clicking ‘Execute workflow’',
         type: 'n8n-nodes-base.manualTrigger',
         version: 1,
-        position: [-3456, -944],
+        position: [-3456, -848],
     })
     WhenClickingExecuteWorkflow = {};
 
@@ -2237,7 +2248,7 @@ return $input.item;`,
         name: 'Head Normaliza  "Sucess"',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-1936, -1376],
+        position: [-1888, -1376],
         onError: 'continueRegularOutput',
         alwaysOutputData: true,
     })
@@ -2598,7 +2609,7 @@ return {
         name: 'Head Normaliza  "Erro"',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-1888, -944],
+        position: [-1888, -656],
         onError: 'continueRegularOutput',
         alwaysOutputData: true,
     })
@@ -3074,7 +3085,7 @@ return {
         name: 'Get Normaliza > Erro',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-1072, -768],
+        position: [-992, -704],
     })
     GetNormalizaErro = {
         mode: 'runOnceForEachItem',
@@ -3536,7 +3547,7 @@ return {
         name: 'GATE_Tem website_norm?',
         type: 'n8n-nodes-base.if',
         version: 2.3,
-        position: [-2368, -944],
+        position: [-2336, -848],
         alwaysOutputData: true,
     })
     GateTemWebsiteNorm = {
@@ -3570,7 +3581,7 @@ return {
         name: 'Get Normaliza > Sucess',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-1072, -976],
+        position: [-992, -896],
     })
     GetNormalizaSucess = {
         mode: 'runOnceForEachItem',
@@ -3900,7 +3911,7 @@ return {
         name: 'Merge2',
         type: 'n8n-nodes-base.merge',
         version: 3.2,
-        position: [-880, -960],
+        position: [-768, -736],
         alwaysOutputData: false,
     })
     Merge2 = {
@@ -3914,7 +3925,7 @@ return {
         name: 'AUDIT · Append URL_CHECKS (HTTP_ERR)1',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-1696, -736],
+        position: [-1664, -416],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         onError: 'continueRegularOutput',
         alwaysOutputData: false,
@@ -4076,7 +4087,7 @@ return {
         name: 'Decide HTTP Fallback',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-1696, -944],
+        position: [-1664, -992],
         alwaysOutputData: true,
     })
     DecideHttpFallback = {
@@ -4163,7 +4174,7 @@ return {
         name: 'If',
         type: 'n8n-nodes-base.if',
         version: 2.3,
-        position: [-1504, -944],
+        position: [-1440, -992],
         onError: 'continueRegularOutput',
         alwaysOutputData: true,
     })
@@ -4198,7 +4209,7 @@ return {
         name: 'HTTP Request',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [-1136, -1328],
+        position: [-1216, -1184],
         onError: 'continueErrorOutput',
         alwaysOutputData: false,
     })
@@ -4231,7 +4242,7 @@ return {
         name: 'HTTPS - GET request_url ',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.3,
-        position: [-1264, -848],
+        position: [-1216, -800],
         onError: 'continueErrorOutput',
         alwaysOutputData: true,
     })
@@ -4284,7 +4295,7 @@ return {
         name: 'HTTPS · HEAD request_url',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.3,
-        position: [-2128, -960],
+        position: [-2112, -944],
         onError: 'continueErrorOutput',
         alwaysOutputData: true,
     })
@@ -4330,7 +4341,7 @@ return {
         name: 'Finalize 5',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-1536, -416],
+        position: [-1440, -224],
     })
     Finalize5 = {
         mode: 'runOnceForEachItem',
@@ -4362,7 +4373,7 @@ return {
         name: 'Finalize 4',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-1504, -736],
+        position: [-1440, -416],
         onError: 'continueRegularOutput',
         alwaysOutputData: false,
     })
@@ -4408,7 +4419,7 @@ return {
         name: 'Finalize ',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-336, -1152],
+        position: [-320, -1088],
     })
     Finalize = {
         mode: 'runOnceForEachItem',
@@ -4443,7 +4454,7 @@ return {
         name: 'STATE · Update CONTROL_EXEC (pós HTTP_OK)2',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-496, -1344],
+        position: [-544, -1280],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -4606,7 +4617,7 @@ return {
         name: 'AUDIT · Append URL_CHECKS (HTTP_OK) 1',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-672, -1344],
+        position: [-768, -1280],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -4768,7 +4779,7 @@ return {
         name: 'Finalize 6',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-336, -1344],
+        position: [-320, -1280],
     })
     Finalize6 = {
         mode: 'runOnceForEachItem',
@@ -4788,7 +4799,7 @@ return {
         name: 'HTTP Normaliza > Erro',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-880, -1152],
+        position: [-992, -1088],
     })
     HttpNormalizaErro = {
         mode: 'runOnceForEachItem',
@@ -5199,7 +5210,7 @@ return {
         name: 'HTTP Normaliza > Sucess',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-880, -1344],
+        position: [-992, -1280],
     })
     HttpNormalizaSucess = {
         mode: 'runOnceForEachItem',
@@ -5560,7 +5571,7 @@ return {
         name: 'AUDIT · Append URL_CHECKS (HTTP)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-672, -1152],
+        position: [-768, -1088],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -5721,7 +5732,7 @@ return {
         name: 'STATE · Update CONTROL_EXEC (pós HTTP)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-496, -1152],
+        position: [-544, -1088],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
