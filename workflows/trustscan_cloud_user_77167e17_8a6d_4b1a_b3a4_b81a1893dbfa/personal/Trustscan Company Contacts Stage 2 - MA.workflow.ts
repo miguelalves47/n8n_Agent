@@ -2,7 +2,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
 // Workflow : Trustscan Company Contacts  Stage 2 - MA
-// Nodes   : 29  |  Connections: 33
+// Nodes   : 36  |  Connections: 37
 //
 // NODE INDEX
 // ──────────────────────────────────────────────────────────────────
@@ -10,8 +10,12 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // Phase1Trigger                      manualTrigger
 // ReadUrlChecks                      googleSheets               [creds]
 // NormalizeInput                     code
+// GateHasUrl                         if
+// WriteNoUrlEvidence                 googleSheets               [creds]
+// UpdateControlExecStage2            googleSheets               [creds] [alwaysOutput]
 // LoopOverCompanies                  splitInBatches
 // SearchSerpapi                      httpRequest                [creds] [alwaysOutput]
+// SearchSerpapi2                     httpRequest                [creds] [alwaysOutput]
 // ParseSerpapiResults                code
 // FetchHomepage                      httpRequest                [onError→regular] [retry]
 // BuildCandidateUrls                 code
@@ -19,9 +23,10 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // AggregateAndCompare                code
 // WriteToControlEvidence             googleSheets               [creds]
 // WaitBeforePhase1Write              wait
-// Phase2Trigger                      manualTrigger
 // DeduplicateCompanies               code
 // LoopFirecrawl                      splitInBatches
+// CheckMissingFields                 if
+// UpdateControlExecFirecrawl         googleSheets               [creds] [alwaysOutput]
 // PrepCrawl                          code
 // FirecrawlStartCrawl                httpRequest                [onError→regular]
 // ExtractCrawlId                     code
@@ -36,44 +41,49 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // ParseFirecrawlResults              code
 // WaitBeforePhase2Write              wait
 // WriteFirecrawlEvidence             googleSheets               [creds]
+// StickyNote                         stickyNote
+// StickyNote1                        stickyNote
 //
 // ROUTING MAP
 // ──────────────────────────────────────────────────────────────────
 // Phase1Trigger
 //    → ReadUrlChecks
 //      → NormalizeInput
-//        → LoopOverCompanies
-//          → WaitBeforePhase1Write
-//            → WriteToControlEvidence
-//              → DeduplicateCompanies
-//                → LoopFirecrawl
-//                 .out(1) → PrepCrawl
-//                    → FirecrawlStartCrawl
-//                      → ExtractCrawlId
-//                        → CheckCrawlStarted
-//                          → WaitCrawlStart
-//                            → PrepPoll
-//                              → PollCrawlStatus
-//                                → CheckCrawlDone
-//                                  → MergeCrawlData
-//                                    → ParseFirecrawlResults
-//                                      → WaitBeforePhase2Write
-//                                        → WriteFirecrawlEvidence
-//                                          → LoopFirecrawl (↩ loop)
-//                                 .out(1) → WaitPollRetry
-//                                    → PrepPoll (↩ loop)
-//                         .out(1) → CrawlFailedFallback
-//                            → ParseFirecrawlResults (↩ loop)
-//         .out(1) → SearchSerpapi
-//            → ParseSerpapiResults
-//              → FetchHomepage
-//                → BuildCandidateUrls
-//                  → FetchCandidate
-//                    → AggregateAndCompare
-//                      → LoopOverCompanies (↩ loop)
-//      → DeduplicateCompanies (↩ loop)
-// Phase2Trigger
-//    → ReadUrlChecks (↩ loop)
+//        → GateHasUrl
+//          → UpdateControlExecStage2
+//          → LoopOverCompanies
+//            → WaitBeforePhase1Write
+//              → WriteToControlEvidence
+//                → DeduplicateCompanies
+//                  → CheckMissingFields
+//                   .out(1) → LoopFirecrawl
+//                     .out(1) → UpdateControlExecFirecrawl
+//                        → PrepCrawl
+//                          → FirecrawlStartCrawl
+//                            → ExtractCrawlId
+//                              → CheckCrawlStarted
+//                                → WaitCrawlStart
+//                                  → PrepPoll
+//                                    → PollCrawlStatus
+//                                      → CheckCrawlDone
+//                                        → MergeCrawlData
+//                                          → ParseFirecrawlResults
+//                                            → WaitBeforePhase2Write
+//                                              → WriteFirecrawlEvidence
+//                                                → LoopFirecrawl (↩ loop)
+//                                       .out(1) → WaitPollRetry
+//                                          → PrepPoll (↩ loop)
+//                               .out(1) → CrawlFailedFallback
+//                                  → ParseFirecrawlResults (↩ loop)
+//           .out(1) → SearchSerpapi
+//              → SearchSerpapi2
+//                → ParseSerpapiResults
+//                  → FetchHomepage
+//                    → BuildCandidateUrls
+//                      → FetchCandidate
+//                        → AggregateAndCompare
+//                          → LoopOverCompanies (↩ loop)
+//         .out(1) → WriteNoUrlEvidence
 // </workflow-map>
 
 // =====================================================================
@@ -97,7 +107,7 @@ export class TrustscanCompanyContactsStage2MaWorkflow {
         name: 'Phase 1 Trigger',
         type: 'n8n-nodes-base.manualTrigger',
         version: 1,
-        position: [-928, 160],
+        position: [-944, -160],
     })
     Phase1Trigger = {};
 
@@ -106,11 +116,10 @@ export class TrustscanCompanyContactsStage2MaWorkflow {
         name: 'Read URL Checks',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [-928, 80],
+        position: [-704, -160],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     ReadUrlChecks = {
-        operation: 'read',
         documentId: {
             __rl: true,
             value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
@@ -129,7 +138,7 @@ export class TrustscanCompanyContactsStage2MaWorkflow {
         name: 'Normalize Input',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-480, 208],
+        position: [-480, -160],
     })
     NormalizeInput = {
         mode: 'runOnceForEachItem',
@@ -149,11 +158,122 @@ return {
     };
 
     @node({
+        id: 'ma-gate-has-url',
+        name: 'Gate Has URL',
+        type: 'n8n-nodes-base.if',
+        version: 2.2,
+        position: [-256, -160],
+    })
+    GateHasUrl = {
+        conditions: {
+            options: {
+                caseSensitive: false,
+                leftValue: '',
+                typeValidation: 'loose',
+                version: 1,
+            },
+            conditions: [
+                {
+                    id: 'has-url',
+                    leftValue: '={{ $json.Website_URL }}',
+                    rightValue: '',
+                    operator: {
+                        type: 'string',
+                        operation: 'notEquals',
+                    },
+                },
+            ],
+            combinator: 'and',
+        },
+        options: {},
+    };
+
+    @node({
+        id: 'ma-write-no-url-evidence',
+        name: 'Write No URL Evidence',
+        type: 'n8n-nodes-base.googleSheets',
+        version: 4.5,
+        position: [-32, -352],
+        credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
+    })
+    WriteNoUrlEvidence = {
+        operation: 'append',
+        documentId: {
+            __rl: true,
+            value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
+            mode: 'id',
+        },
+        sheetName: {
+            __rl: true,
+            value: 'CONTROL_EVIDENCE',
+            mode: 'name',
+        },
+        columns: {
+            mappingMode: 'defineBelow',
+            value: {
+                Run_ID: '={{ $json.RUN_ID }}',
+                Entity_key: '={{ $json.EntityKey }}',
+                'Field (phone | email | address)': '',
+                Value: '',
+                Source_url: 'No URL',
+                'Source_type  (input | serpapi | scrape | openai)': 'input',
+                Confidence: '',
+                Extracted_at: '={{ $now.setZone("Europe/Lisbon").toISO() }}',
+                SerpAPI_ContactUrls: '',
+            },
+            matchingColumns: [],
+            schema: [],
+        },
+        options: {},
+    };
+
+    @node({
+        id: 'ma-update-ctrl-exec-stage2',
+        name: 'Update Control Exec Stage 2',
+        type: 'n8n-nodes-base.googleSheets',
+        version: 4.7,
+        position: [-32, -160],
+        credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
+        alwaysOutputData: true,
+    })
+    UpdateControlExecStage2 = {
+        operation: 'appendOrUpdate',
+        documentId: {
+            __rl: true,
+            value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
+            mode: 'id',
+        },
+        sheetName: {
+            __rl: true,
+            value: 'CONTROL_EXEC',
+            mode: 'name',
+        },
+        columns: {
+            mappingMode: 'defineBelow',
+            value: {
+                Exec_key: '={{ $json.RUN_ID + "_" + $json.EntityKey }}',
+                Run_ID: '={{ $json.RUN_ID }}',
+                Entity_key: '={{ $json.EntityKey }}',
+                Current_phase: 'STAGE 2',
+                Process_Status: 'IN_PROGRESS',
+                Next_action: 'STAGE 3',
+                Queued_action: 'SERPAPI',
+                Updated_at: '={{ $now.setZone("Europe/Lisbon").toISO() }}',
+            },
+            matchingColumns: ['Exec_key'],
+            schema: [],
+            attemptToConvertTypes: false,
+            convertFieldsToString: false,
+        },
+        options: {},
+    };
+
+    @node({
         id: '570560b5-c8f3-4c65-82ce-82170786795c',
         name: 'Loop Over Companies',
         type: 'n8n-nodes-base.splitInBatches',
         version: 3,
-        position: [-256, 208],
+        position: [288, -32],
     })
     LoopOverCompanies = {
         options: {},
@@ -164,7 +284,7 @@ return {
         name: 'Search SerpAPI',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.3,
-        position: [-32, 16],
+        position: [512, -32],
         credentials: { serpApi: { id: 'TPQCvbAqVDrs1oJp', name: 'SerpAPI account' } },
         alwaysOutputData: true,
     })
@@ -179,8 +299,71 @@ return {
                     name: '=q',
                     value: `={{
   $json.Website_URL
-    ? 'site:' + $json.Website_URL.replace(/^https?:\\/\\//i,'').replace(/\\/+$/,'') + ' (inurl:contact OR inurl:contact-us OR inurl:contacto OR inurl:contactos OR inurl:about OR inurl:about-us OR inurl:sobre OR inurl:quem-somos OR inurl:quien-somos OR inurl:nosotros OR inurl:equipa OR inurl:equipo OR inurl:team OR inurl:our-team OR inurl:who-we-are OR inurl:get-in-touch OR inurl:reach-us OR inurl:apoio OR inurl:suporte OR inurl:support OR inurl:atendimento OR inurl:fale OR inurl:legal OR inurl:impressum OR inurl:imprint OR inurl:privacy OR email OR telefone OR "+351" OR "+34")'
-    : $json.EntityKey + ' contacto email telefone site:pt'
+    ? 'site:' + $json.Website_URL.replace(/^https?:\\/\\//i,'').replace(/\\/+$/,'') + ' (inurl:contact OR inurl:contacto OR inurl:apoio OR inurl:suporte OR inurl:fale OR inurl:atendimento OR inurl:sobre OR inurl:about OR inurl:legal)'
+    : $json.EntityKey + ' contacto email telefone'
+}}`,
+                },
+                {
+                    name: 'engine',
+                    value: 'google',
+                },
+                {
+                    name: 'google_domain',
+                    value: 'google.pt',
+                },
+                {
+                    name: 'hl',
+                    value: 'pt',
+                },
+                {
+                    name: 'gl',
+                    value: 'pt',
+                },
+                {
+                    name: 'filter',
+                    value: '0',
+                },
+                {
+                    name: 'num',
+                    value: '10',
+                },
+            ],
+        },
+        options: {
+            redirect: {
+                redirect: {},
+            },
+            response: {
+                response: {
+                    fullResponse: true,
+                },
+            },
+        },
+    };
+
+    @node({
+        id: 'serpapi-call2',
+        name: 'Search SerpAPI 2',
+        type: 'n8n-nodes-base.httpRequest',
+        version: 4.3,
+        position: [736, -32],
+        credentials: { serpApi: { id: 'TPQCvbAqVDrs1oJp', name: 'SerpAPI account' } },
+        alwaysOutputData: true,
+    })
+    SearchSerpapi2 = {
+        url: '=https://serpapi.com/search',
+        authentication: 'predefinedCredentialType',
+        nodeCredentialType: 'serpApi',
+        sendQuery: true,
+        queryParameters: {
+            parameters: [
+                {
+                    name: '=q',
+                    value: `={{
+  ($('Loop Over Companies').item.json.Website_URL
+    ? $('Loop Over Companies').item.json.Website_URL.replace(/^https?:\\/\\//i,'').replace(/\\/+$/,'').replace(/^www\\./,'')
+    : $('Loop Over Companies').item.json.EntityKey)
+  + ' contacto email telefone morada sede direccion headquarters'
 }}`,
                 },
                 {
@@ -226,32 +409,76 @@ return {
         name: 'Parse SerpAPI Results',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [192, 16],
+        position: [960, -32],
     })
     ParseSerpapiResults = {
-        jsCode: `// Identity from the current loop item — .item.json is per-iteration, not .first()
+        jsCode: `// Merges results from both SerpAPI calls (call1=site: inurl, call2=entity+address keywords).
 const trig = $('Loop Over Companies').item.json;
 
 const EMAIL_JUNK  = /\\.(png|jpe?g|gif|svg|webp|ico|js|css|woff2?|ttf)(\\?|$)|sentry\\.io|wixpress|@.*\\.wix|@sentry|@example|@domain|@email|@yourdomain|@company|@sitename|noreply@|no-reply@/i;
 const PREF_PREFIX = /^(geral|info|contacto|contactos|contact|hello|ola|support|suporte|comercial|apoio|atendimento|reservas|marketing|imprensa|press|rgpd)@/i;
-const phoneRegex  = /(?:^|[^\\d+])((?:(?:\\+|00)351[\\s.\\-]?(?:2(?:1[0-9]|2[0-9]|3[1-9]|4[1-9]|5[1-9]|6[1-9]|7[1-9]|8[1-9]|9[1-9])|9(?:1|2|3|6)|800|808)[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}|(?:2(?:1[0-9]|2[0-9]|3[1-9]|4[1-9]|5[1-9]|6[1-9]|7[1-9]|8[1-9]|9[1-9])|9(?:1|2|3|6)|800|808)[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}|(?:\\+|00)34[\\s.\\-]?(?:[6-9]\\d{2})[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}))(?![\\d])/g;
-const emailRegex  = /[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g;
+const phoneRegex  = /(?:^|[^\\d+])((?:(?:\\+|00)351[\\s.\\-]?(?:2(?:1[0-9]|2[0-9]|3[1-9]|4[1-9]|5[1-9]|6[1-9]|7[1-9]|8[1-9]|9[1-9])|9[1236]\\d|800|808)[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}|(?:2(?:1[0-9]|2[0-9]|3[1-9]|4[1-9]|5[1-9]|6[1-9]|7[1-9]|8[1-9]|9[1-9])|9[1236]\\d|800|808)[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}|(?:\\+|00)34[\\s.\\-]?(?:[6-9]\\d{2})[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}))(?![\\d])/g;
+// Email: must start with a real local-part (no leading dots), strip Google's "...@domain" truncation
+const emailRegex  = /[a-zA-Z0-9\\u00C0-\\u017E][a-zA-Z0-9._%+\\-\\u00C0-\\u017E]{2,}@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g;
+// Address: street keyword + rest of line (trimmed after city)
+const addrRegex   = /(?:Rua|R\\.|Avenida|Av\\.|Avda\\.|Pra[çc]a|Largo|Estrada|Travessa|Cal[çc]ada|Alameda|Beco|Calle|C\\/|Carrer|Passeig|Paseo|Plaza|Pl\\.|Edificio|Edif\\.|Pol\\.?\\s*Ind\\.|Pol[íi]gono|Urb\\.)\\s{0,2}[^\\n]{5,120}/g;
+
+function trimAddress(raw) {
+  var t = String(raw || "").replace(/\\s+/g, ' ').trim();
+
+  // Step 1: hard separators — cut immediately ("; Telemóvel:", "– Bernardo", "| Contact")
+  var hm = /\\s*[;|–—]\\s*/.exec(t);
+  if (hm && hm.index > 8) t = t.slice(0, hm.index);
+
+  // Step 2: cut at explicit contact/noise keywords preceded by space or dot
+  // Real examples: ". Actividade", " Contact Us", " CONTATO", " Pagamentos", " NIF", " River View"
+  var nm = /[\\s.]+(Telefone|Telemóvel|Telemovel|Tel\\b|Telf\\b|Tlf\\b|Fax\\b|Email\\b|NIF\\b|CONTATO|Contato|Contact|Actividade|Pagamentos|Vendas|River\\b|View\\b|Office\\b|Robert\\b|Código\\b|Codigo\\b|COMÉRCIO|COMERCIO|www\\.)/i.exec(t);
+  if (nm && nm.index > 8) t = t.slice(0, nm.index);
+
+  // Step 3: anchor to postal code — PT (DDDD-DDD) or ES (5 digits standalone)
+  // After the postal code allow up to 30 chars for city name then cut
+  var pm = /(\\d{4}-\\d{3})/.exec(t) || /(?<![\\d-])(\\d{5})(?![\\d-])/.exec(t);
+  if (pm) {
+    var after = t.slice(pm.index + pm[0].length);
+    var cityTail = after.match(/^[^.;|–—]{0,30}/);
+    t = t.slice(0, pm.index + pm[0].length) + (cityTail ? cityTail[0] : '');
+  }
+
+  // Step 4: country name as anchor — only cut here if no postal code follows within 20 chars
+  var cm = /\\b(PORTUGAL|Portugal|España|Espanha|Spain)\\b/.exec(t);
+  if (cm) {
+    var afterCountry = t.slice(cm.index + cm[0].length, cm.index + cm[0].length + 20);
+    var hasPostalAfter = /\\d{4}-\\d{3}|\\d{5}/.test(afterCountry);
+    if (!hasPostalAfter) t = t.slice(0, cm.index + cm[0].length);
+  }
+
+  // Step 5: final cap and strip trailing punctuation/spaces
+  return t.slice(0, 120).replace(/[\\s,\\.\\-]+$/, '').trim();
+}
 
 function extractFromText(text) {
   const emails = new Set(), phones = new Set(), t = String(text || '');
-  for (const m of t.matchAll(emailRegex)) { if (!EMAIL_JUNK.test(m[0])) emails.add(m[0].toLowerCase()); }
+  for (const m of t.matchAll(new RegExp(emailRegex.source, 'g'))) {
+    const e = m[0].toLowerCase();
+    if (e.startsWith('...') || EMAIL_JUNK.test(e)) continue;
+    emails.add(e);
+  }
   let pm; const pr2 = new RegExp(phoneRegex.source, 'g');
   while ((pm = pr2.exec(t)) !== null) {
     const cleaned = pm[1].replace(/[\\s.\\-()]/g, '').trim();
     const digits  = cleaned.replace(/[\\+]/g, '');
     if (digits.length === 9 || digits.length === 11 || digits.length === 12 || digits.length === 13) { const stored = cleaned.startsWith('+') ? '00' + cleaned.slice(1) : cleaned; phones.add(stored); }
   }
-  return { emails: [...emails], phones: [...phones] };
+  const addrs = new Set();
+  const ar2 = new RegExp(addrRegex.source, 'g');
+  let am;
+  while ((am = ar2.exec(t)) !== null) { const a = trimAddress(am[0].replace(/\\s+/g,' ')); if (a.length > 8) addrs.add(a); }
+  return { emails: [...emails], phones: [...phones], addrs: [...addrs] };
 }
 
 function rankEmail(emails, domain) {
   if (!emails.length) return '';
-  const d    = String(domain || '').toLowerCase().replace(/^www\\./, '');
+  const d = String(domain || '').toLowerCase().replace(/^www\\./, '');
   const same = emails.filter(e => d && e.endsWith('@' + d));
   const samePref = same.filter(e => PREF_PREFIX.test(e));
   if (samePref.length) return samePref[0];
@@ -261,54 +488,77 @@ function rankEmail(emails, domain) {
   return emails[0];
 }
 
-const serpItem = $input.all()[0];
-const body     = serpItem?.json?.body || serpItem?.json || {};
-const organic  = Array.isArray(body.organic_results) ? body.organic_results : [];
-const kg       = body.knowledge_graph || {};
+// Pull both call results — call1 is $input, call2 from Search SerpAPI 2 (per-iteration)
+const call1Item = $input.first();
+const call2Item = $('Search SerpAPI 2').item;
+const body1 = call1Item?.json?.body || call1Item?.json || {};
+const body2 = call2Item?.json?.body || call2Item?.json || {};
 
-// Extract homeDomain without new URL() — n8n sandbox may not support it reliably
-let homeDomain = '';
+// Merge organic results from both calls
+const organic1 = Array.isArray(body1.organic_results) ? body1.organic_results : [];
+const organic2 = Array.isArray(body2.organic_results) ? body2.organic_results : [];
+const organic  = [...organic1, ...organic2];
+
+// Knowledge graph: prefer call1 (site: query returns more accurate KG), fall back to call2
+const kg = Object.keys(body1.knowledge_graph || {}).length ? (body1.knowledge_graph || {}) : (body2.knowledge_graph || {});
+
+// homeDomain from trigger
 const rawSite = trig.Website_URL || '';
-const siteMatch = rawSite.replace(/^https?:\\/\\//i, '').replace(/\\/.*$/, '').replace(/^www\\./, '');
-if (siteMatch) { homeDomain = siteMatch; }
-if (!homeDomain) {
-  const qParam = String((serpItem?.json?.body || serpItem?.json || {})?.search_parameters?.q || '');
-  const siteQ = qParam.match(/site:([^\\s(]+)/);
-  if (siteQ) homeDomain = siteQ[1].replace(/^www\\./, '').replace(/\\/.*$/, '');
-}
+const homeDomain = rawSite.replace(/^https?:\\/\\//i, '').replace(/\\/.*$/, '').replace(/^www\\./, '');
 
 const kgEmail   = kg.email    ? kg.email.toLowerCase().trim()              : '';
 const kgPhone   = kg.phone    ? kg.phone.replace(/[\\s.\\-()]/g, '').trim() : '';
 const kgAddress = kg.address  || kg.headquarters || '';
 const kgWebsite = kg.website  || '';
 
-const allEmails = [], allPhones = [];
+// Track value → source URL — only use own-domain links as source
+const emailSourceMap = new Map();
+const phoneSourceMap = new Map();
+const addrSourceMap  = new Map();
+const allEmails = [], allPhones = [], allAddrs = [];
+
 for (const r of organic) {
-  const { emails, phones } = extractFromText((r.snippet || '') + ' ' + (r.title || ''));
-  allEmails.push(...emails);
-  allPhones.push(...phones);
+  const link = String(r.link || '');
+  const isOwnDomain = homeDomain && link.toLowerCase().includes(homeDomain);
+  const { emails, phones, addrs } = extractFromText((r.snippet || '') + ' ' + (r.title || ''));
+  for (const e of emails) { allEmails.push(e); if (isOwnDomain && !emailSourceMap.has(e)) emailSourceMap.set(e, link); }
+  for (const p of phones) { allPhones.push(p); if (isOwnDomain && !phoneSourceMap.has(p)) phoneSourceMap.set(p, link); }
+  for (const a of addrs)  { allAddrs.push(a);  if (isOwnDomain && !addrSourceMap.has(a))  addrSourceMap.set(a, link); }
 }
 
-const serpContactUrls = organic
-  .filter(r => {
-    if (!homeDomain || !r.link) return false;
-    const linkLower = String(r.link).toLowerCase();
-    return linkLower.includes(homeDomain);
-  })
-  .map(r => r.link)
-  .slice(0, 3);
+const bestEmail   = kgEmail   || rankEmail(allEmails, homeDomain);
+const bestPhone   = kgPhone   || phoneSourceMap.keys().next().value || allPhones[0] || '';
+const bestAddress = kgAddress || addrSourceMap.keys().next().value  || allAddrs[0]  || '';
+const websiteUrlClean = String(trig.Website_URL || '').trim();
+
+// Build SerpAPI_ContactUrls as a map: value → own-domain subpage URL
+const serpContactMap = {};
+if (bestEmail   && emailSourceMap.has(bestEmail))   serpContactMap[bestEmail]   = emailSourceMap.get(bestEmail);
+if (bestPhone   && phoneSourceMap.has(bestPhone))   serpContactMap[bestPhone]   = phoneSourceMap.get(bestPhone);
+if (bestAddress && addrSourceMap.has(bestAddress))  serpContactMap[bestAddress] = addrSourceMap.get(bestAddress);
+
+// Also track Url fields for AggregateAndCompare source attribution
+const serpContactUrls = [...new Map(
+  organic
+    .filter(r => homeDomain && r.link && String(r.link).toLowerCase().includes(homeDomain))
+    .map(r => [r.link, r.link])
+).values()].slice(0, 5);
 
 return [{
   json: {
-    RUN_ID:                String(trig.RUN_ID     || '').trim(),
-    EntityKey:             String(trig.EntityKey  || '').trim(),
-    Website_URL:           String(trig.Website_URL || '').trim(),
-    SerpAPI_Email:         kgEmail   || rankEmail(allEmails, homeDomain),
-    SerpAPI_Phone:         kgPhone   || allPhones[0] || '',
-    SerpAPI_Address:       kgAddress,
-    SerpAPI_Website:       kgWebsite,
-    SerpAPI_ContactUrls:   serpContactUrls,
-    SerpAPI_OrganicCount:  organic.length,
+    RUN_ID:               String(trig.RUN_ID      || '').trim(),
+    EntityKey:            String(trig.EntityKey   || '').trim(),
+    Website_URL:          websiteUrlClean,
+    SerpAPI_Email:        bestEmail,
+    SerpAPI_Email_Url:    emailSourceMap.get(bestEmail) || websiteUrlClean,
+    SerpAPI_Phone:        bestPhone,
+    SerpAPI_Phone_Url:    phoneSourceMap.get(bestPhone) || websiteUrlClean,
+    SerpAPI_Address:      bestAddress,
+    SerpAPI_Address_Url:  addrSourceMap.get(bestAddress) || websiteUrlClean,
+    SerpAPI_Website:      kgWebsite,
+    SerpAPI_ContactUrls:  serpContactUrls,
+    SerpAPI_ContactMap:   serpContactMap,
+    SerpAPI_OrganicCount: organic.length,
   },
 }];
 `,
@@ -319,7 +569,7 @@ return [{
         name: 'Fetch Homepage',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [416, 16],
+        position: [1184, -32],
         onError: 'continueRegularOutput',
         retryOnFail: true,
         maxTries: 2,
@@ -369,7 +619,7 @@ return [{
         name: 'Build Candidate URLs',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [640, 16],
+        position: [1408, -32],
     })
     BuildCandidateUrls = {
         jsCode: `// Fan-out: homepage response → homepage item + ranked contact subpage items.
@@ -377,7 +627,7 @@ return [{
 const fetched  = $input.all()[0];
 if (!fetched) return [];
 const j        = fetched.json;
-const serpData = $('Parse SerpAPI Results').first().json;
+const serpData = $('Parse SerpAPI Results').item.json;
 
 const excel = {
   RUN_ID:      String(serpData.RUN_ID      || '').trim(),
@@ -443,7 +693,7 @@ return [emit(excel.Website_URL, 'homepage', rawHomepage, '', ''), ...subpages.ma
         name: 'Fetch Candidate',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [864, 16],
+        position: [1632, -32],
         onError: 'continueRegularOutput',
     })
     FetchCandidate = {
@@ -490,14 +740,14 @@ return [emit(excel.Website_URL, 'homepage', rawHomepage, '', ''), ...subpages.ma
         name: 'Aggregate And Compare',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1088, 192],
+        position: [1856, 112],
     })
     AggregateAndCompare = {
         jsCode: `// Collects all fetched HTML pages for one company and emits one row per contact item.
 // source_type: 'scrape' for contacts found in HTML, 'serpapi' for contacts from SerpAPI only.
 const fetched  = $input.all();
 const meta     = $('Build Candidate URLs').all();
-const serpData = $('Parse SerpAPI Results').first().json;
+const serpData = $('Parse SerpAPI Results').item.json;
 const trig     = $('Loop Over Companies').item.json;
 
 const runId      = String(serpData.RUN_ID      || trig.RUN_ID      || '').trim();
@@ -527,7 +777,7 @@ const deobfuscate     = (s) => String(s||'').replace(/\\s*\\[\\s*at\\s*\\]\\s*/g
 const extractEmails = (html) => {
   const found = new Set();
   [...html.matchAll(/href\\s*=\\s*["']mailto:([^"'?#]+)/gi)].forEach(m => { if (!EMAIL_JUNK.test(m[1])) found.add(m[1].toLowerCase().trim()); });
-  (deobfuscate(decodeEntities(html)).match(/[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g)||[]).forEach(e => { if (!EMAIL_JUNK.test(e)) found.add(e.toLowerCase().trim()); });
+  (deobfuscate(decodeEntities(html)).match(/[a-zA-Z0-9\\u00C0-\\u017E][a-zA-Z0-9._%+\\-\\u00C0-\\u017E]{2,}@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g)||[]).forEach(e => { const el = e.toLowerCase().trim(); if (!el.startsWith('...') && !EMAIL_JUNK.test(el)) found.add(el); });
   return [...found];
 };
 const extractPhones = (html) => {
@@ -536,7 +786,7 @@ const extractPhones = (html) => {
   // Strict prefix validation to avoid matching serial numbers, zip codes, etc.
   // PT landline: 2xx (valid area codes), PT mobile: 91/92/93/96, PT toll-free: 800/808
   // ES landline: 8xx/9xx, ES mobile: 6xx/7xx — always require country code for ES
-  const pr = /(?:^|[^\\d+])((?:(?:\\+|00)351[\\s.\\-]?(?:2(?:1[0-9]|2[0-9]|3[1-9]|4[1-9]|5[1-9]|6[1-9]|7[1-9]|8[1-9]|9[1-9])|9(?:1|2|3|6)|800|808)[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}|(?:2(?:1[0-9]|2[0-9]|3[1-9]|4[1-9]|5[1-9]|6[1-9]|7[1-9]|8[1-9]|9[1-9])|9(?:1|2|3|6)|800|808)[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}|(?:\\+|00)34[\\s.\\-]?(?:[6-9]\\d{2})[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}))(?![\\d])/g;
+  const pr = /(?:^|[^\\d+])((?:(?:\\+|00)351[\\s.\\-]?(?:2(?:1[0-9]|2[0-9]|3[1-9]|4[1-9]|5[1-9]|6[1-9]|7[1-9]|8[1-9]|9[1-9])|9[1236]\\d|800|808)[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}|(?:2(?:1[0-9]|2[0-9]|3[1-9]|4[1-9]|5[1-9]|6[1-9]|7[1-9]|8[1-9]|9[1-9])|9[1236]\\d|800|808)[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}|(?:\\+|00)34[\\s.\\-]?(?:[6-9]\\d{2})[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}))(?![\\d])/g;
   let m;
   while ((m = pr.exec(html)) !== null) {
     const c = m[1].replace(/[\\s.\\-()]/g,'').trim();
@@ -563,6 +813,30 @@ const extractFromJsonLd = (rawHtml) => {
   return result;
 };
 
+const trimAddr = (raw) => {
+  var t = String(raw || '').replace(new RegExp('[\\t\\r\\n]+', 'g'), ' ').replace(new RegExp('  +', 'g'), ' ').trim();
+  t = t.replace(new RegExp('&#[0-9]+;', 'g'), '').replace(new RegExp('&[a-z]+;', 'g'), ' ').trim();
+  var nm = new RegExp('[\\s.]+(Telefone|Telef|Telemovel|Telemóvel|Tel[\\s:.]|Telf[\\s:.]|Fax[\\s:.]|Email[\\s:@]|NIF|CONTATO|Contato|Contact|www\\.)', 'i').exec(t);
+  if (nm && nm.index > 8) t = t.slice(0, nm.index);
+  var pm = new RegExp('(\\d{4}-\\d{3})').exec(t) || new RegExp('(?<![\\d-])(\\d{5})(?![\\d-])').exec(t);
+  if (!pm) return '';
+  var after = t.slice(pm.index + pm[0].length);
+  var ct = after.match(new RegExp('^[^.;|\\u2013\\u2014]{0,30}'));
+  t = t.slice(0, pm.index + pm[0].length) + (ct ? ct[0] : '');
+  return t.slice(0, 120).replace(new RegExp('[\\s,\\.\\-]+$'), '').trim();
+};
+const extractAddresses = (text) => {
+  const clean = String(text || '').replace(new RegExp('[\\t\\r\\n]+', 'g'), ' ').replace(new RegExp('  +', 'g'), ' ');
+  const found = new Set();
+  const streetRe = new RegExp('(?:Rua|R\\.\\s|Avenida|Av\\.\\s|Avda\\.\\s|Pra[\\u00e7c]a|Largo\\s|Estrada|Travessa|Cal[\\u00e7c]ada|Alameda|Beco\\s|Calle\\s|Carrer\\s|Passeig|Paseo|Plaza\\s|Edif[\\u00ed]cio|Edif\\.\\s|Pol\\.?\\s*Ind\\.)[^]{5,160}', 'g');
+  let am;
+  while ((am = streetRe.exec(clean)) !== null) {
+    const a = trimAddr(am[0]);
+    if (a && a.length > 10) found.add(a);
+  }
+  return [...found];
+};
+
 let homepage_html = '';
 const subpage_htmls = [];
 for (let i = 0; i < meta.length; i++) {
@@ -574,33 +848,49 @@ for (let i = 0; i < meta.length; i++) {
   }
 }
 
-const rawBundle   = [homepage_html, ...subpage_htmls].join('\\n\\n');
+// Subpages first (contact pages are more reliable) then homepage
+const rawBundle   = [...subpage_htmls, homepage_html].join('\\n\\n');
 const jl          = extractFromJsonLd(rawBundle);
 const cleanBundle = stripNoise(rawBundle);
-const scrapeEmails = [...new Set([...jl.emails, ...extractEmails(cleanBundle)])].filter(e=>!EMAIL_JUNK.test(e));
-const scrapePhones = [...new Set([...jl.phones, ...extractPhones(cleanBundle)])];
+const scrapeEmails    = [...new Set([...jl.emails, ...extractEmails(cleanBundle)])].filter(e=>!EMAIL_JUNK.test(e));
+const scrapePhones    = [...new Set([...jl.phones, ...extractPhones(cleanBundle)])];
+const scrapeAddresses = extractAddresses(cleanBundle);
 
-const serpEmail   = serpData.SerpAPI_Email   || '';
-const serpPhone   = serpData.SerpAPI_Phone   || '';
-const serpAddress = serpData.SerpAPI_Address || '';
-const serpWebsite = serpData.SerpAPI_Website || '';
+const serpEmail      = serpData.SerpAPI_Email      || '';
+const serpPhone      = serpData.SerpAPI_Phone      || '';
+const serpAddress    = serpData.SerpAPI_Address    || '';
+const serpWebsite    = serpData.SerpAPI_Website    || '';
+const serpEmailUrl   = serpData.SerpAPI_Email_Url   || websiteUrl;
+const serpPhoneUrl   = serpData.SerpAPI_Phone_Url   || websiteUrl;
+const serpAddressUrl = serpData.SerpAPI_Address_Url || websiteUrl;
 
-const allEmails    = [...new Set([...scrapeEmails, ...(serpEmail   ? [serpEmail]   : [])])];
-const allPhones    = [...new Set([...scrapePhones, ...(serpPhone   ? [serpPhone]   : [])])];
-const allAddresses = serpAddress ? [serpAddress] : [];
+// SerpAPI takes priority: if SerpAPI found it, label serpapi and use its source URL
+const serpEmailSet = new Set(serpEmail ? [serpEmail.toLowerCase()] : []);
+const serpPhoneSet = new Set(serpPhone ? [serpPhone]               : []);
+
+const allEmails    = [...new Set([...(serpEmail   ? [serpEmail]   : []), ...scrapeEmails])];
+const allPhones    = [...new Set([...(serpPhone   ? [serpPhone]   : []), ...scrapePhones])];
+const allAddresses = [...new Set([...(serpAddress ? [serpAddress] : []), ...scrapeAddresses])];
 const allWebsites  = [...new Set([websiteUrl, ...(serpWebsite ? [serpWebsite] : [])].filter(Boolean))];
 
 const scrapeStatus = !websiteUrl ? 'No_URL' : (meta.length===1 && meta[0].json.Error_Status) ? meta[0].json.Error_Status : 'Done';
-const now  = new Date().toISOString();
-const base = { Run_ID: runId, Entity_key: entityKey, Scrape_Status: scrapeStatus, Extracted_at: now };
+const now  = $now.setZone("Europe/Lisbon").toISO();
+const base = { Run_ID: runId, Entity_key: entityKey, Extracted_at: now };
 
 const serpContactUrls = Array.isArray(serpData.SerpAPI_ContactUrls) ? serpData.SerpAPI_ContactUrls : [];
+const Has_Email   = allEmails.length > 0;
+const Has_Phone   = allPhones.length > 0;
+const Has_Address = allAddresses.length > 0;
+// SerpAPI_ContactMap: value → own-domain subpage where it was found (for the sheet)
+const serpContactMap = typeof serpData.SerpAPI_ContactMap === 'object' && serpData.SerpAPI_ContactMap !== null
+  ? serpData.SerpAPI_ContactMap : {};
+
 const rows = [];
-for (const v of allEmails)    rows.push({ json: { ...base, 'Field (phone | email | internet)': 'email',    Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': scrapeEmails.includes(v) ? 'scrape' : 'serpapi', SerpAPI_ContactUrls: JSON.stringify(serpContactUrls) } });
-for (const v of allPhones)    rows.push({ json: { ...base, 'Field (phone | email | internet)': 'phone',    Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': scrapePhones.includes(v) ? 'scrape' : 'serpapi', SerpAPI_ContactUrls: JSON.stringify(serpContactUrls) } });
-for (const v of allAddresses) rows.push({ json: { ...base, 'Field (phone | email | internet)': 'address',  Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': 'serpapi', SerpAPI_ContactUrls: JSON.stringify(serpContactUrls) } });
-for (const v of allWebsites)  rows.push({ json: { ...base, 'Field (phone | email | internet)': 'internet', Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': 'scrape',  SerpAPI_ContactUrls: JSON.stringify(serpContactUrls) } });
-if (rows.length === 0) rows.push({ json: { ...base, 'Field (phone | email | internet)': '', Value: '', Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': 'none', SerpAPI_ContactUrls: JSON.stringify(serpContactUrls) } });
+for (const v of allEmails)    rows.push({ json: { ...base, 'Field (phone | email | address)': 'email',   Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': serpEmailSet.has(v.toLowerCase()) ? 'serpapi' : 'scrape', SerpAPI_ContactUrls: serpContactMap[v] || serpContactMap[v.toLowerCase()] || '' } });
+for (const v of allPhones)    rows.push({ json: { ...base, 'Field (phone | email | address)': 'phone',   Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': serpPhoneSet.has(v)                ? 'serpapi' : 'scrape', SerpAPI_ContactUrls: serpContactMap[v] || '' } });
+const serpAddrSet = new Set(serpAddress ? [serpAddress] : []);
+for (const v of allAddresses) rows.push({ json: { ...base, 'Field (phone | email | address)': 'address', Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': serpAddrSet.has(v) ? 'serpapi' : 'scrape', SerpAPI_ContactUrls: serpContactMap[v] || '' } });
+if (rows.length === 0) rows.push({ json: { ...base, 'Field (phone | email | address)': '', Value: '', Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': 'none', SerpAPI_ContactUrls: '' } });
 return rows;
 `,
     };
@@ -610,7 +900,7 @@ return rows;
         name: 'Write To Control Evidence',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [-32, -288],
+        position: [688, -464],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     WriteToControlEvidence = {
@@ -626,8 +916,19 @@ return rows;
             mode: 'name',
         },
         columns: {
-            mappingMode: 'autoMapInputData',
-            value: {},
+            mappingMode: 'defineBelow',
+            value: {
+                Run_ID: '={{ $json.Run_ID }}',
+                Entity_key: '={{ $json.Entity_key }}',
+                'Field (phone | email | address)': '={{ $json["Field (phone | email | address)"] }}',
+                Value: '={{ $json.Value }}',
+                Source_url: '={{ $json.Source_url }}',
+                'Source_type  (input | serpapi | scrape | openai)':
+                    '={{ $json["Source_type  (input | serpapi | scrape | openai)"] }}',
+                Confidence: '',
+                Extracted_at: '={{ $json.Extracted_at }}',
+                SerpAPI_ContactUrls: '={{ $json.SerpAPI_ContactUrls }}',
+            },
             matchingColumns: [],
             schema: [
                 {
@@ -651,13 +952,13 @@ return rows;
                     removed: false,
                 },
                 {
-                    id: 'Field (phone | email | internet)',
-                    displayName: 'Field (phone | email | internet)',
+                    id: 'Field (phone | email | address)',
+                    displayName: 'Field (phone | email | address)',
                     required: false,
                     defaultMatch: false,
                     display: true,
                     type: 'string',
-                    canBeUsedToMatch: true,
+                    canBeUsedToMatch: false,
                     removed: false,
                 },
                 {
@@ -667,7 +968,7 @@ return rows;
                     defaultMatch: false,
                     display: true,
                     type: 'string',
-                    canBeUsedToMatch: true,
+                    canBeUsedToMatch: false,
                     removed: false,
                 },
                 {
@@ -677,7 +978,7 @@ return rows;
                     defaultMatch: false,
                     display: true,
                     type: 'string',
-                    canBeUsedToMatch: true,
+                    canBeUsedToMatch: false,
                     removed: false,
                 },
                 {
@@ -687,7 +988,7 @@ return rows;
                     defaultMatch: false,
                     display: true,
                     type: 'string',
-                    canBeUsedToMatch: true,
+                    canBeUsedToMatch: false,
                     removed: false,
                 },
                 {
@@ -697,7 +998,7 @@ return rows;
                     defaultMatch: false,
                     display: true,
                     type: 'string',
-                    canBeUsedToMatch: true,
+                    canBeUsedToMatch: false,
                     removed: false,
                 },
                 {
@@ -707,7 +1008,17 @@ return rows;
                     defaultMatch: false,
                     display: true,
                     type: 'string',
-                    canBeUsedToMatch: true,
+                    canBeUsedToMatch: false,
+                    removed: false,
+                },
+                {
+                    id: 'SerpAPI_ContactUrls',
+                    displayName: 'SerpAPI_ContactUrls',
+                    required: false,
+                    defaultMatch: false,
+                    display: true,
+                    type: 'string',
+                    canBeUsedToMatch: false,
                     removed: false,
                 },
             ],
@@ -723,56 +1034,61 @@ return rows;
         name: 'Wait Before Phase 1 Write',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [-32, -420],
+        position: [464, -464],
     })
     WaitBeforePhase1Write = {
-        resume: 'timeInterval',
         amount: 2,
-        unit: 'seconds',
     };
-
-    @node({
-        id: 'phase2-manual-trigger',
-        name: 'Phase 2 Trigger',
-        type: 'n8n-nodes-base.manualTrigger',
-        version: 1,
-        position: [-928, -288],
-    })
-    Phase2Trigger = {};
 
     @node({
         id: 'fc-deduplicate-companies',
         name: 'Deduplicate Companies',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [256, -288],
+        position: [912, -464],
     })
     DeduplicateCompanies = {
-        jsCode: `// Phase 1 emits one row per contact (email/phone/address) so the same company
-// appears N times. Deduplicate by Website_URL before feeding the Firecrawl loop.
-// Also carry SerpAPI_ContactUrls so Firecrawl can use them as seed hints.
+        jsCode: `// Receives rows from WriteToControlEvidence (Phase 1) or ReadUrlChecks (Phase 2).
+// Deduplicate by Website_URL. Infer Has_Email/Phone/Address from Field value.
 const seen = new Map(); // url → index in unique[]
 const unique = [];
 for (const item of $input.all()) {
-  const url = String(item.json.Source_url || item.json.Website_URL || '').trim();
+  // Support Source_url (Phase 1 rows), Website_URL, and Final_url/Final_URL (Phase 2 raw rows)
+  let rawUrl = String(item.json.Source_url || item.json.Website_URL || item.json['Final_url'] || item.json['Final_URL'] || '').trim();
+  if (rawUrl && !rawUrl.startsWith('http')) rawUrl = 'https://' + rawUrl;
+  const url = rawUrl.replace(/\\/+$/, '');
   if (!url) continue;
-  let serpUrls = [];
-  try { serpUrls = JSON.parse(item.json.SerpAPI_ContactUrls || '[]'); } catch (_) {}
+  const field = String(item.json['Field (phone | email | address)'] || '').trim();
+  const serpUrls = [];
+  const serpMap = (item.json.SerpAPI_ContactMap && typeof item.json.SerpAPI_ContactMap === 'object') ? item.json.SerpAPI_ContactMap : {};
   if (!seen.has(url)) {
     seen.set(url, unique.length);
     unique.push({
       json: {
-        RUN_ID:              String(item.json.Run_ID    || item.json.RUN_ID    || '').trim(),
-        EntityKey:           String(item.json.Entity_key || item.json.EntityKey || '').trim(),
+        RUN_ID:              String(item.json.Run_ID    || item.json.RUN_ID    || item.json['Run_ID']    || '').trim(),
+        EntityKey:           String(item.json.Entity_key || item.json.EntityKey || item.json['Entity_key'] || '').trim(),
         Website_URL:         url,
         SerpAPI_ContactUrls: serpUrls,
+        SerpAPI_ContactMap:  serpMap,
+        Has_Email:           field === 'email',
+        Has_Phone:           field === 'phone',
+        Has_Address:         field === 'address',
       },
     });
   } else {
-    // Merge any additional SerpAPI URLs from later rows for the same company
-    const existing = unique[seen.get(url)].json.SerpAPI_ContactUrls;
-    for (const u of serpUrls) { if (!existing.includes(u)) existing.push(u); }
+    const entry = unique[seen.get(url)].json;
+    if (field === 'email')   entry.Has_Email   = true;
+    if (field === 'phone')   entry.Has_Phone   = true;
+    if (field === 'address') entry.Has_Address = true;
+    Object.assign(entry.SerpAPI_ContactMap, serpMap);
   }
+}
+for (const entry of unique) {
+  const missing = [];
+  if (!entry.json.Has_Email)   missing.push('email');
+  if (!entry.json.Has_Phone)   missing.push('phone');
+  if (!entry.json.Has_Address) missing.push('address');
+  entry.json.Missing_Fields = missing;
 }
 return unique;
 `,
@@ -783,9 +1099,76 @@ return unique;
         name: 'Loop Firecrawl',
         type: 'n8n-nodes-base.splitInBatches',
         version: 3,
-        position: [512, -288],
+        position: [1360, -464],
     })
     LoopFirecrawl = {
+        options: {},
+    };
+
+    @node({
+        id: 'fc-check-missing-fields',
+        name: 'Check Missing Fields',
+        type: 'n8n-nodes-base.if',
+        version: 2.2,
+        position: [1136, -464],
+    })
+    CheckMissingFields = {
+        conditions: {
+            options: {
+                caseSensitive: false,
+                leftValue: '',
+                typeValidation: 'loose',
+                version: 1,
+            },
+            conditions: [
+                {
+                    id: 'missing-fields-nonempty',
+                    leftValue: '={{ $json.Missing_Fields.length }}',
+                    rightValue: 0,
+                    operator: {
+                        type: 'number',
+                        operation: 'equals',
+                    },
+                },
+            ],
+            combinator: 'and',
+        },
+        options: {},
+    };
+
+    @node({
+        id: 'ma-update-ctrl-exec-firecrawl',
+        name: 'Update Control Exec Firecrawl',
+        type: 'n8n-nodes-base.googleSheets',
+        version: 4.7,
+        position: [1584, -560],
+        credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
+        alwaysOutputData: true,
+    })
+    UpdateControlExecFirecrawl = {
+        operation: 'appendOrUpdate',
+        documentId: {
+            __rl: true,
+            value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
+            mode: 'id',
+        },
+        sheetName: {
+            __rl: true,
+            value: 'CONTROL_EXEC',
+            mode: 'name',
+        },
+        columns: {
+            mappingMode: 'defineBelow',
+            value: {
+                Exec_key: '={{ $json.RUN_ID + "_" + $json.EntityKey }}',
+                Queued_action: 'FIRECRAWL',
+                Updated_at: '={{ $now.setZone("Europe/Lisbon").toISO() }}',
+            },
+            matchingColumns: ['Exec_key'],
+            schema: [],
+            attemptToConvertTypes: false,
+            convertFieldsToString: false,
+        },
         options: {},
     };
 
@@ -794,11 +1177,21 @@ return unique;
         name: 'Prep Crawl',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [640, -288],
+        position: [1808, -560],
     })
     PrepCrawl = {
-        jsCode: `const item = $input.first().json;
-const baseInclude = [".*contact.*",".*contac.*",".*contact-us.*",".*about.*",".*about-us.*",".*sobre.*",".*empresa.*",".*quem.somos.*",".*quien.somos.*",".*nosotros.*",".*equipa.*",".*equipo.*",".*team.*",".*our-team.*",".*who-we-are.*",".*get-in-touch.*",".*reach-us.*",".*apoio.*",".*suporte.*",".*support.*",".*atendimento.*",".*fale.*",".*legal.*",".*impressum.*",".*imprint.*",".*privacy.*"];
+        jsCode: `let item;
+try { item = $('Loop Firecrawl').item.json; } catch(_) { item = $input.first().json; }
+const baseInclude = [
+  // pt-pt locale + contact/about page — highest priority
+  ".*/pt-pt/.*(contact|contac|about|sobre|empresa|apoio|suporte|fale|atendimento|legal|privacy|quem|equipa).*",
+  ".*/pt/.*(contact|contac|about|sobre|empresa|apoio|suporte|fale|atendimento|legal|privacy|quem|equipa).*",
+  // es locale + contact/about — second priority (Spain in scope)
+  ".*/es/.*(contact|contac|about|sobre|empresa|apoio|suporte|fale|atendimento|legal|privacy|quem|equipa|nosotros|quien).*",
+  // plain contact/about pages (no locale prefix)
+  ".*contact.*",".*contac.*",".*contact-us.*",".*about.*",".*about-us.*",".*sobre.*",".*empresa.*",".*quem.somos.*",".*quien.somos.*",".*nosotros.*",".*equipa.*",".*equipo.*",".*team.*",".*our-team.*",".*who-we-are.*",".*get-in-touch.*",".*reach-us.*",".*apoio.*",".*suporte.*",".*support.*",".*atendimento.*",".*fale.*",".*legal.*",".*impressum.*",".*imprint.*",".*privacy.*"
+];
+const excludePaths = [".*/en/.*",".*/en-.*",".*/fr/.*",".*/fr-.*",".*/de/.*",".*/de-.*",".*/it/.*",".*/it-.*",".*/nl/.*",".*/nl-.*",".*/ru/.*",".*/zh/.*",".*/ja/.*",".*/ko/.*",".*/pl/.*",".*/cs/.*",".*/hu/.*",".*/ro/.*"];
 const serpUrls = Array.isArray(item.SerpAPI_ContactUrls) ? item.SerpAPI_ContactUrls : [];
 // Pure string path extraction — new URL() silently returns empty hostname in n8n sandbox
 const serpPaths = serpUrls.flatMap(function(u) {
@@ -806,7 +1199,8 @@ const serpPaths = serpUrls.flatMap(function(u) {
   return p ? [".*" + p + ".*"] : [];
 });
 const includePaths = baseInclude.concat(serpPaths.filter(function(x) { return baseInclude.indexOf(x) === -1; }));
-return [{ json: { RUN_ID: String(item.RUN_ID || "").trim(), EntityKey: String(item.EntityKey || "").trim(), Website_URL: String(item.Website_URL || "").trim(), SerpAPI_ContactUrls: serpUrls, includePaths: includePaths } }];`,
+const missingFields = Array.isArray(item.Missing_Fields) ? item.Missing_Fields : [];
+return [{ json: { RUN_ID: String(item.RUN_ID || "").trim(), EntityKey: String(item.EntityKey || "").trim(), Website_URL: String(item.Website_URL || "").trim(), SerpAPI_ContactUrls: serpUrls, includePaths: includePaths, excludePaths: excludePaths, Missing_Fields: missingFields } }];`,
     };
 
     @node({
@@ -814,7 +1208,7 @@ return [{ json: { RUN_ID: String(item.RUN_ID || "").trim(), EntityKey: String(it
         name: 'Firecrawl Start Crawl',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.3,
-        position: [768, -288],
+        position: [2032, -560],
         onError: 'continueRegularOutput',
     })
     FirecrawlStartCrawl = {
@@ -825,7 +1219,7 @@ return [{ json: { RUN_ID: String(item.RUN_ID || "").trim(), EntityKey: String(it
             parameters: [
                 {
                     name: 'Authorization',
-                    value: 'Bearer fc-ddcb4e2f45c7449c92b1d3d7bafd5512',
+                    value: 'Bearer fc-bcb07136c3e64a7a8ab7c51dcf397568',
                 },
                 {
                     name: 'Content-Type',
@@ -836,7 +1230,7 @@ return [{ json: { RUN_ID: String(item.RUN_ID || "").trim(), EntityKey: String(it
         sendBody: true,
         specifyBody: 'json',
         jsonBody:
-            '={{ JSON.stringify({ url: $json.Website_URL, limit: 8, scrapeOptions: { formats: ["markdown"], onlyMainContent: true }, includePaths: $json.includePaths }) }}',
+            '={{ JSON.stringify({ url: $json.Website_URL, limit: 8, includePaths: $json.includePaths, excludePaths: $json.excludePaths, scrapeOptions: { formats: ["markdown"], onlyMainContent: true, headers: { "Accept-Language": "pt-PT,pt;q=0.9,en;q=0.5", "Accept": "text/html,application/xhtml+xml" } } }) }}',
         options: {
             response: {
                 response: {
@@ -852,10 +1246,11 @@ return [{ json: { RUN_ID: String(item.RUN_ID || "").trim(), EntityKey: String(it
         name: 'Extract Crawl ID',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [768, -416],
+        position: [2256, -560],
     })
     ExtractCrawlId = {
-        jsCode: `const loopItem = $('Loop Firecrawl').item.json;
+        jsCode: `let loopItem;
+try { loopItem = $('Loop Firecrawl').item.json; } catch(_) { loopItem = $('Prep Crawl').first().json; }
 const resp = $input.first().json;
 const body = resp?.body || resp || {};
 const crawlId = body?.id || body?.jobId || '';
@@ -865,6 +1260,7 @@ return [{
     EntityKey:           String(loopItem.EntityKey   || '').trim(),
     Website_URL:         String(loopItem.Website_URL || '').trim(),
     SerpAPI_ContactUrls: Array.isArray(loopItem.SerpAPI_ContactUrls) ? loopItem.SerpAPI_ContactUrls : [],
+    Missing_Fields:      Array.isArray(loopItem.Missing_Fields) ? loopItem.Missing_Fields : [],
     crawl_id:            crawlId,
     poll_attempt:        0,
   },
@@ -876,7 +1272,7 @@ return [{
         name: 'Check Crawl Started',
         type: 'n8n-nodes-base.if',
         version: 2.2,
-        position: [1024, -416],
+        position: [2480, -560],
     })
     CheckCrawlStarted = {
         conditions: {
@@ -884,6 +1280,7 @@ return [{
                 caseSensitive: false,
                 leftValue: '',
                 typeValidation: 'loose',
+                version: 1,
             },
             conditions: [
                 {
@@ -906,17 +1303,17 @@ return [{
         name: 'Crawl Failed Fallback',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1024, -256],
+        position: [3600, -544],
     })
     CrawlFailedFallback = {
         jsCode: `const inp = $input.first().json;
 return [{ json: {
-  RUN_ID:              String(inp.RUN_ID      || '').trim(),
-  EntityKey:           String(inp.EntityKey   || '').trim(),
-  Website_URL:         String(inp.Website_URL || '').trim(),
-  SerpAPI_ContactUrls: Array.isArray(inp.SerpAPI_ContactUrls) ? inp.SerpAPI_ContactUrls : [],
-  pages_scraped:       0,
-  page_data:           '[]',
+  RUN_ID:         String(inp.RUN_ID      || '').trim(),
+  EntityKey:      String(inp.EntityKey   || '').trim(),
+  Website_URL:    String(inp.Website_URL || '').trim(),
+  Missing_Fields: Array.isArray(inp.Missing_Fields) ? inp.Missing_Fields : [],
+  pages_scraped:  0,
+  page_data:      '[]',
 } }];`,
     };
 
@@ -926,12 +1323,10 @@ return [{ json: {
         name: 'Wait Crawl Start',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [1280, -544],
+        position: [2704, -752],
     })
     WaitCrawlStart = {
-        resume: 'timeInterval',
         amount: 20,
-        unit: 'seconds',
     };
 
     @node({
@@ -939,7 +1334,7 @@ return [{ json: {
         name: 'Prep Poll',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1536, -544],
+        position: [2928, -752],
     })
     PrepPoll = {
         jsCode: `const inp = $input.first().json;
@@ -949,11 +1344,14 @@ const starter = $('Check Crawl Started').first()?.json || {};
 const crawlId = String(inp.crawl_id || '').trim() || String(starter.crawl_id || '').trim();
 const serpUrls = Array.isArray(inp.SerpAPI_ContactUrls) ? inp.SerpAPI_ContactUrls
   : Array.isArray(starter.SerpAPI_ContactUrls) ? starter.SerpAPI_ContactUrls : [];
+const missingFields = Array.isArray(inp.Missing_Fields) ? inp.Missing_Fields
+  : Array.isArray(starter.Missing_Fields) ? starter.Missing_Fields : [];
 return [{ json: {
   RUN_ID:              String(inp.RUN_ID      || starter.RUN_ID      || '').trim(),
   EntityKey:           String(inp.EntityKey   || starter.EntityKey   || '').trim(),
   Website_URL:         String(inp.Website_URL || starter.Website_URL || '').trim(),
   SerpAPI_ContactUrls: serpUrls,
+  Missing_Fields:      missingFields,
   crawl_id:            crawlId,
   poll_attempt:        Number(inp.poll_attempt || 0) + 1,
 } }];`,
@@ -964,18 +1362,17 @@ return [{ json: {
         name: 'Poll Crawl Status',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.3,
-        position: [1536, -416],
+        position: [3152, -896],
         onError: 'continueRegularOutput',
     })
     PollCrawlStatus = {
-        method: 'GET',
         url: '={{ "https://api.firecrawl.dev/v1/crawl/" + $json.crawl_id }}',
         sendHeaders: true,
         headerParameters: {
             parameters: [
                 {
                     name: 'Authorization',
-                    value: 'Bearer fc-ddcb4e2f45c7449c92b1d3d7bafd5512',
+                    value: 'Bearer fc-bcb07136c3e64a7a8ab7c51dcf397568',
                 },
             ],
         },
@@ -994,7 +1391,7 @@ return [{ json: {
         name: 'Check Crawl Done',
         type: 'n8n-nodes-base.if',
         version: 2.2,
-        position: [1792, -544],
+        position: [3376, -896],
     })
     CheckCrawlDone = {
         conditions: {
@@ -1002,6 +1399,7 @@ return [{ json: {
                 caseSensitive: false,
                 leftValue: '',
                 typeValidation: 'loose',
+                version: 1,
             },
             conditions: [
                 {
@@ -1013,8 +1411,17 @@ return [{ json: {
                         operation: 'equals',
                     },
                 },
+                {
+                    id: 'crawl-max-attempts',
+                    leftValue: '={{ $runIndex }}',
+                    rightValue: 1,
+                    operator: {
+                        type: 'number',
+                        operation: 'gte',
+                    },
+                },
             ],
-            combinator: 'and',
+            combinator: 'or',
         },
         options: {},
     };
@@ -1025,12 +1432,10 @@ return [{ json: {
         name: 'Wait Poll Retry',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [1792, -416],
+        position: [3600, -736],
     })
     WaitPollRetry = {
-        resume: 'timeInterval',
         amount: 15,
-        unit: 'seconds',
     };
 
     @node({
@@ -1038,25 +1443,25 @@ return [{ json: {
         name: 'Merge Crawl Data',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [2048, -544],
+        position: [3600, -880],
     })
     MergeCrawlData = {
         jsCode: `const prepItem = $('Prep Poll').item.json;
 const resp = $input.first().json;
 const body = resp?.body || resp || {};
 const pages = Array.isArray(body.data) ? body.data : [];
-// Build per-page objects: { url, markdown } so ParseFirecrawlResults can attribute contacts to the specific subpage scraped.
 const pageData = pages.map(p => ({
   url:      String(p.metadata?.sourceURL || p.url || p.sourceURL || ''),
   markdown: String(p.markdown || p.content || ''),
 })).filter(p => p.markdown);
 return [{
   json: {
-    RUN_ID:        String(prepItem.RUN_ID      || '').trim(),
-    EntityKey:     String(prepItem.EntityKey   || '').trim(),
-    Website_URL:   String(prepItem.Website_URL || '').trim(),
-    pages_scraped: pages.length,
-    page_data:     JSON.stringify(pageData),
+    RUN_ID:         String(prepItem.RUN_ID      || '').trim(),
+    EntityKey:      String(prepItem.EntityKey   || '').trim(),
+    Website_URL:    String(prepItem.Website_URL || '').trim(),
+    Missing_Fields: Array.isArray(prepItem.Missing_Fields) ? prepItem.Missing_Fields : [],
+    pages_scraped:  pages.length,
+    page_data:      JSON.stringify(pageData),
   },
 }];`,
     };
@@ -1066,62 +1471,125 @@ return [{
         name: 'Parse Firecrawl Results',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [2048, -416],
+        position: [3856, -688],
     })
     ParseFirecrawlResults = {
-        jsCode: `// Extracts emails and phones per crawled page; Source_url is the specific subpage scraped.
-const inp        = $input.first().json;
-const runId      = String(inp.RUN_ID      || '').trim();
-const entityKey  = String(inp.EntityKey   || '').trim();
-const websiteUrl = String(inp.Website_URL || '').trim();
+        jsCode: `// Only extracts fields still missing after the SerpAPI phase.
+// Missing_Fields = ["email","phone","address"] subset — skip anything already found.
+const inp           = $input.first().json;
+const runId         = String(inp.RUN_ID      || '').trim();
+const entityKey     = String(inp.EntityKey   || '').trim();
+const websiteUrl    = String(inp.Website_URL || '').trim();
+const missingFields = Array.isArray(inp.Missing_Fields) ? inp.Missing_Fields : ['email','phone','address'];
 
-const EMAIL_JUNK = /\\.(png|jpe?g|gif|svg|webp|ico|js|css|woff2?|ttf)(\\?|$)|sentry\\.io|wixpress|@.*\\.wix|@sentry|@example|@domain|@email|@yourdomain|@company|@sitename|noreply@|no-reply@/i;
-const emailRegex = /[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g;
-// PT+ES flexible regex — Firecrawl markdown is clean prose so loose prefix matching is fine here.
-const phoneRegex = /(?:^|[^\\d+])((?:(?:\\+|00)(?:351|34)[\\s.\\-]?)?(?:9[0-9]|[2-9]\\d)[\\s.\\-]?\\d[\\s.\\-]?\\d[\\s.\\-]?(?:\\d[\\s.\\-]?){4}\\d)(?![\\d])/g;
+const needEmail   = missingFields.includes('email');
+const needPhone   = missingFields.includes('phone');
+const needAddress = missingFields.includes('address');
+
+const EMAIL_JUNK   = /\\.(png|jpe?g|gif|svg|webp|ico|js|css|woff2?|ttf)(\\?|$)|sentry\\.io|wixpress|@.*\\.wix|@sentry|@example|@domain|@email|@yourdomain|@company|@sitename|noreply@|no-reply@/i;
+const emailRegex   = /[a-zA-Z0-9\\u00C0-\\u017E][a-zA-Z0-9._%+\\-\\u00C0-\\u017E]{2,}@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/g;
+const phoneRegex   = /(?:^|[^\\d+])((?:(?:\\+|00)351[\\s.\\-]?(?:2(?:1[0-9]|2[0-9]|3[1-9]|4[1-9]|5[1-9]|6[1-9]|7[1-9]|8[1-9]|9[1-9])|9[1236]\\d|800|808)[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}|(?:2(?:1[0-9]|2[0-9]|3[1-9]|4[1-9]|5[1-9]|6[1-9]|7[1-9]|8[1-9]|9[1-9])|9[1236]\\d|800|808)[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}|(?:\\+|00)34[\\s.\\-]?(?:[6-9]\\d{2})[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}))(?![\\d])/g;
+// Street-keyword regex: Portuguese + Spanish formats
+const addressRegex = /(?:Rua|R\\.|Avenida|Av\\.|Avda\\.|Pra[çc]a|Largo|Estrada|Travessa|Cal[çc]ada|Alameda|Beco|Calle|C\\/|Carrer|Passeig|Paseo|Plaza|Pl\\.|Edificio|Edif\\.|Pol\\.?\\s*Ind\\.|Pol[íi]gono|Urb\\.)\\s{0,2}[^\\n]{5,120}/g;
+// Label-based: captures value after "Endereço", "Dirección", "Dirección:", "Address:" etc.
+const labelAddressRegex = /(?:Endere[çc]o|Direc[cç][ií][oó]n|Direcci[oó]n|Morada|Address|Sede)\\s*[:\\-]?\\s*([^\\n]{8,150})/gi;
+
+function trimAddress(raw) {
+  var t = String(raw || "").replace(/\\s+/g, ' ').trim();
+
+  // Strip label prefixes that appear before the street keyword (e.g. "Social: ", "Sede: ")
+  var lp = /^[^A-Z\\u00C0-\\u00FF]{0,30}(?:Rua|Avenida|Av\\.|Avda\\.|Pra[\\u00e7c]a|Largo|Estrada|Travessa|Cal[\\u00e7c]ada|Alameda|Beco|Calle|Carrer|Passeig|Paseo|Plaza|Edif[\\u00ed]cio|Edif\\.|Pol\\.?\\s*Ind\\.|Pol[\\u00edi]gono|Urb\\.)/i.exec(t);
+  if (lp && lp.index > 0) t = t.slice(lp.index);
+
+  // Step 1: hard separators
+  var hm = /\\s*[;|\\u2013\\u2014]\\s*/.exec(t);
+  if (hm && hm.index > 8) t = t.slice(0, hm.index);
+
+  // Step 2: cut at contact/noise keywords
+  var nm = /[\\s.]+(Telefone|Telemóvel|Telemovel|Tel\\b|Telf\\b|Tlf\\b|Fax\\b|Email\\b|NIF\\b|CONTATO|Contato|Contact|Actividade|Pagamentos|Vendas|River\\b|View\\b|Office\\b|Robert\\b|Código\\b|Codigo\\b|COMÉRCIO|COMERCIO|www\\.)/i.exec(t);
+  if (nm && nm.index > 8) t = t.slice(0, nm.index);
+
+  // Step 3: postal code is MANDATORY — discard if not present
+  var pm = /(\\d{4}-\\d{3})/.exec(t) || /(?<![\\d-])(\\d{5})(?![\\d-])/.exec(t);
+  if (!pm) return '';
+  var after = t.slice(pm.index + pm[0].length);
+  var cityTail = after.match(/^[^.;|\\u2013\\u2014]{0,30}/);
+  t = t.slice(0, pm.index + pm[0].length) + (cityTail ? cityTail[0] : '');
+
+  // Step 4: country name as terminator if no postal code follows
+  var cm = /\\b(PORTUGAL|Portugal|España|Espanha|Spain)\\b/.exec(t);
+  if (cm) {
+    var afterCountry = t.slice(cm.index + cm[0].length, cm.index + cm[0].length + 20);
+    var hasPostalAfter = /\\d{4}-\\d{3}|\\d{5}/.test(afterCountry);
+    if (!hasPostalAfter) t = t.slice(0, cm.index + cm[0].length);
+  }
+
+  // Step 5: cap and strip trailing punctuation
+  return t.slice(0, 120).replace(/[\\s,\\.\\-]+$/, '').trim();
+}
 
 let pageData = [];
 try { pageData = JSON.parse(inp.page_data || '[]'); } catch (_) {}
 
-// Track first page where each contact was found.
-const emailSource = new Map(); // value → url
-const phoneSource = new Map();
+const emailSource   = new Map(); // value → first source url
+const phoneSource   = new Map();
+const addressSource = new Map();
 
 for (const page of pageData) {
   const md  = String(page.markdown || '');
   const url = String(page.url || websiteUrl);
-  for (const m of md.matchAll(new RegExp(emailRegex.source, 'g'))) {
-    const e = m[0].toLowerCase().trim();
-    if (!EMAIL_JUNK.test(e) && !emailSource.has(e)) emailSource.set(e, url);
+
+  if (needEmail) {
+    for (const m of md.matchAll(new RegExp(emailRegex.source, 'g'))) {
+      const e = m[0].toLowerCase().trim();
+      if (!e.startsWith('...') && !EMAIL_JUNK.test(e) && !emailSource.has(e)) emailSource.set(e, url);
+    }
   }
-  const pr2 = new RegExp(phoneRegex.source, 'g');
-  let pm;
-  while ((pm = pr2.exec(md)) !== null) {
-    const cleaned = pm[1].replace(/[\\s.\\-()]/g, '').trim();
-    const digits  = cleaned.replace(/[\\+]/g, '');
-    // PT: 9 digits bare or 12 with 351 prefix. ES: 9 digits bare or 11 with 34 prefix.
-    if (digits.length === 9 || digits.length === 11 || digits.length === 12) {
-      // Skip numbers that are just the EntityKey itself (company registration number).
-      if (digits === entityKey) continue;
-      // Normalise: replace leading + with 00 so Google Sheets doesn't strip it as a formula prefix.
-      const stored = cleaned.startsWith('+') ? '00' + cleaned.slice(1) : cleaned;
-      if (!phoneSource.has(stored)) phoneSource.set(stored, url);
+
+  if (needPhone) {
+    const pr2 = new RegExp(phoneRegex.source, 'g');
+    let pm;
+    while ((pm = pr2.exec(md)) !== null) {
+      const cleaned = pm[1].replace(/[\\s.\\-()]/g, '').trim();
+      const digits  = cleaned.replace(/[\\+]/g, '');
+      if (digits.length === 9 || digits.length === 11 || digits.length === 12) {
+        if (digits === entityKey) continue;
+        const stored = cleaned.startsWith('+') ? '00' + cleaned.slice(1) : cleaned;
+        if (!phoneSource.has(stored)) phoneSource.set(stored, url);
+      }
+    }
+  }
+
+  if (needAddress) {
+    const ar2 = new RegExp(addressRegex.source, 'g');
+    let am;
+    while ((am = ar2.exec(md)) !== null) {
+      const addr = trimAddress(am[0].replace(/\\s+/g, ' '));
+      if (addr.length > 8 && !addressSource.has(addr)) addressSource.set(addr, url);
+    }
+    // Label-based extraction: "Endereço: ...", "Dirección: ...", "Morada: ...", "Address: ..."
+    const lr2 = new RegExp(labelAddressRegex.source, 'gi');
+    let lm;
+    while ((lm = lr2.exec(md)) !== null) {
+      const addr = trimAddress(lm[1].replace(/\\s+/g, ' '));
+      if (addr.length > 8 && !addressSource.has(addr)) addressSource.set(addr, url);
     }
   }
 }
 
-const now = new Date().toISOString();
+const now  = $now.setZone("Europe/Lisbon").toISO();
 const base = {
-  Run_ID:      runId,
-  Entity_key:  entityKey,
+  Run_ID:       runId,
+  Entity_key:   entityKey,
   Extracted_at: now,
   'Source_type  (input | serpapi | scrape | openai)': 'firecrawl',
 };
 
 const rows = [];
-for (const [v, srcUrl] of emailSource) rows.push({ json: { ...base, 'Field (phone | email | internet)': 'email', Value: v, Source_url: srcUrl } });
-for (const [v, srcUrl] of phoneSource) rows.push({ json: { ...base, 'Field (phone | email | internet)': 'phone', Value: v, Source_url: srcUrl } });
-if (rows.length === 0) rows.push({ json: { ...base, 'Field (phone | email | internet)': '', Value: '', Source_url: websiteUrl } });
+for (const [v, srcUrl] of emailSource)   rows.push({ json: { ...base, 'Field (phone | email | address)': 'email',   Value: v, Source_url: websiteUrl, SerpAPI_ContactUrls: srcUrl !== websiteUrl ? srcUrl : '' } });
+for (const [v, srcUrl] of phoneSource)   rows.push({ json: { ...base, 'Field (phone | email | address)': 'phone',   Value: v, Source_url: websiteUrl, SerpAPI_ContactUrls: srcUrl !== websiteUrl ? srcUrl : '' } });
+for (const [v, srcUrl] of addressSource) rows.push({ json: { ...base, 'Field (phone | email | address)': 'address', Value: v, Source_url: websiteUrl, SerpAPI_ContactUrls: srcUrl !== websiteUrl ? srcUrl : '' } });
+if (rows.length === 0) rows.push({ json: { ...base, 'Field (phone | email | address)': '', Value: '', Source_url: websiteUrl, SerpAPI_ContactUrls: '' } });
 return rows;
 `,
     };
@@ -1132,20 +1600,16 @@ return rows;
         name: 'Wait Before Phase 2 Write',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [2304, -416],
+        position: [4048, -688],
     })
-    WaitBeforePhase2Write = {
-        resume: 'timeInterval',
-        amount: 5,
-        unit: 'seconds',
-    };
+    WaitBeforePhase2Write = {};
 
     @node({
         id: 'fc-write-firecrawl-evidence',
         name: 'Write Firecrawl Evidence',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [2304, -288],
+        position: [4256, -448],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     WriteFirecrawlEvidence = {
@@ -1186,8 +1650,8 @@ return rows;
                     removed: false,
                 },
                 {
-                    id: 'Field (phone | email | internet)',
-                    displayName: 'Field (phone | email | internet)',
+                    id: 'Field (phone | email | address)',
+                    displayName: 'Field (phone | email | address)',
                     required: false,
                     defaultMatch: false,
                     display: true,
@@ -1235,11 +1699,48 @@ return rows;
                     canBeUsedToMatch: true,
                     removed: false,
                 },
+                {
+                    id: 'SerpAPI_ContactUrls',
+                    displayName: 'SerpAPI_ContactUrls',
+                    required: false,
+                    defaultMatch: false,
+                    display: true,
+                    type: 'string',
+                    canBeUsedToMatch: false,
+                    removed: false,
+                },
             ],
             attemptToConvertTypes: false,
             convertFieldsToString: false,
         },
         options: {},
+    };
+
+    @node({
+        id: '45688f6f-d67b-459b-8548-7a04e2fafa93',
+        name: 'Sticky Note',
+        type: 'n8n-nodes-base.stickyNote',
+        version: 1,
+        position: [208, -96],
+    })
+    StickyNote = {
+        content: '## SerpAPI and Scraper',
+        height: 448,
+        width: 1824,
+    };
+
+    @node({
+        id: '41f13b27-6637-42b3-949c-1f7587e8a5f5',
+        name: 'Sticky Note1',
+        type: 'n8n-nodes-base.stickyNote',
+        version: 1,
+        position: [368, -928],
+    })
+    StickyNote1 = {
+        content: '## FireCrawl',
+        height: 736,
+        width: 4096,
+        color: 6,
     };
 
     // =====================================================================
@@ -1249,13 +1750,15 @@ return rows;
     @links()
     defineRouting() {
         this.Phase1Trigger.out(0).to(this.ReadUrlChecks.in(0));
-        this.Phase2Trigger.out(0).to(this.ReadUrlChecks.in(0));
         this.ReadUrlChecks.out(0).to(this.NormalizeInput.in(0));
-        this.ReadUrlChecks.out(0).to(this.DeduplicateCompanies.in(0));
-        this.NormalizeInput.out(0).to(this.LoopOverCompanies.in(0));
+        this.NormalizeInput.out(0).to(this.GateHasUrl.in(0));
+        this.GateHasUrl.out(0).to(this.UpdateControlExecStage2.in(0));
+        this.GateHasUrl.out(0).to(this.LoopOverCompanies.in(0));
+        this.GateHasUrl.out(1).to(this.WriteNoUrlEvidence.in(0));
         this.LoopOverCompanies.out(0).to(this.WaitBeforePhase1Write.in(0));
         this.LoopOverCompanies.out(1).to(this.SearchSerpapi.in(0));
-        this.SearchSerpapi.out(0).to(this.ParseSerpapiResults.in(0));
+        this.SearchSerpapi.out(0).to(this.SearchSerpapi2.in(0));
+        this.SearchSerpapi2.out(0).to(this.ParseSerpapiResults.in(0));
         this.ParseSerpapiResults.out(0).to(this.FetchHomepage.in(0));
         this.FetchHomepage.out(0).to(this.BuildCandidateUrls.in(0));
         this.BuildCandidateUrls.out(0).to(this.FetchCandidate.in(0));
@@ -1263,8 +1766,10 @@ return rows;
         this.AggregateAndCompare.out(0).to(this.LoopOverCompanies.in(0));
         this.WaitBeforePhase1Write.out(0).to(this.WriteToControlEvidence.in(0));
         this.WriteToControlEvidence.out(0).to(this.DeduplicateCompanies.in(0));
-        this.DeduplicateCompanies.out(0).to(this.LoopFirecrawl.in(0));
-        this.LoopFirecrawl.out(1).to(this.PrepCrawl.in(0));
+        this.DeduplicateCompanies.out(0).to(this.CheckMissingFields.in(0));
+        this.CheckMissingFields.out(1).to(this.LoopFirecrawl.in(0));
+        this.LoopFirecrawl.out(1).to(this.UpdateControlExecFirecrawl.in(0));
+        this.UpdateControlExecFirecrawl.out(0).to(this.PrepCrawl.in(0));
         this.PrepCrawl.out(0).to(this.FirecrawlStartCrawl.in(0));
         this.FirecrawlStartCrawl.out(0).to(this.ExtractCrawlId.in(0));
         this.ExtractCrawlId.out(0).to(this.CheckCrawlStarted.in(0));
