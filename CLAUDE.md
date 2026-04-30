@@ -760,6 +760,12 @@ A: `2.14.2` (per `AGENTS.md`). The ontology in `packages/skills` is rebuilt agai
 - [n8n community templates](https://n8n.io/workflows/) — source of the 7,702 indexed templates.
 - [`n8n-as-code` GitHub](https://github.com/EtienneLescot/n8n-as-code) — toolkit source.
 
+### Per-workflow logic guides
+
+These docs explain the **business logic** of specific workflows — read the matching one before editing the workflow file.
+
+- `workflows/trustscan_cloud_user_77167e17_8a6d_4b1a_b3a4_b81a1893dbfa/personal/STAGE_2.md` — Stage 2 (MA) logic: SerpAPI/scrape collector, coverage gate, Firecrawl fallback, source attribution rules, CONTROL_EXEC state transitions.
+
 ---
 
 **Mantra for every session.**
