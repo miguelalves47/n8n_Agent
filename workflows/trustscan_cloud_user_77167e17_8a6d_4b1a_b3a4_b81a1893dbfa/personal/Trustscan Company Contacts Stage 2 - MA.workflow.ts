@@ -11,22 +11,20 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // ReadUrlChecks                      googleSheets               [creds]
 // NormalizeInput                     code
 // GateHasUrl                         if
-// WriteNoUrlEvidence                 googleSheets               [creds]
 // UpdateControlExecStage2            googleSheets               [creds] [alwaysOutput]
 // LoopOverCompanies                  splitInBatches
+// WaitBeforeSerpapi                  wait
 // SearchSerpapi                      httpRequest                [creds] [alwaysOutput]
-// SearchSerpapi2                     httpRequest                [creds] [alwaysOutput]
 // ParseSerpapiResults                code
 // FetchHomepage                      httpRequest                [onError→regular] [retry]
 // BuildCandidateUrls                 code
-// FetchCandidate                     httpRequest                [onError→regular]
+// FetchCandidate                     httpRequest                [onError→regular] [retry]
 // AggregateAndCompare                code
-// WriteToControlEvidence             googleSheets               [creds]
+// WriteToControlEvidence             googleSheets               [creds] [retry]
 // WaitBeforePhase1Write              wait
 // DeduplicateCompanies               code
 // LoopFirecrawl                      splitInBatches
 // CheckMissingFields                 if
-// UpdateControlExecFirecrawl         googleSheets               [creds] [alwaysOutput]
 // PrepCrawl                          code
 // FirecrawlStartCrawl                httpRequest                [onError→regular]
 // ExtractCrawlId                     code
@@ -40,9 +38,11 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 // MergeCrawlData                     code
 // ParseFirecrawlResults              code
 // WaitBeforePhase2Write              wait
-// WriteFirecrawlEvidence             googleSheets               [creds]
+// WriteFirecrawlEvidence             googleSheets               [creds] [retry]
+// UpdateControlExecDone              googleSheets               [creds] [alwaysOutput] [retry]
 // StickyNote                         stickyNote
 // StickyNote1                        stickyNote
+// UpdateControlExecScraperDone       googleSheets               [creds] [alwaysOutput] [retry]
 //
 // ROUTING MAP
 // ──────────────────────────────────────────────────────────────────
@@ -56,34 +56,34 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 //              → WriteToControlEvidence
 //                → DeduplicateCompanies
 //                  → CheckMissingFields
+//                    → UpdateControlExecScraperDone
 //                   .out(1) → LoopFirecrawl
-//                     .out(1) → UpdateControlExecFirecrawl
-//                        → PrepCrawl
-//                          → FirecrawlStartCrawl
-//                            → ExtractCrawlId
-//                              → CheckCrawlStarted
-//                                → WaitCrawlStart
-//                                  → PrepPoll
-//                                    → PollCrawlStatus
-//                                      → CheckCrawlDone
-//                                        → MergeCrawlData
-//                                          → ParseFirecrawlResults
-//                                            → WaitBeforePhase2Write
-//                                              → WriteFirecrawlEvidence
+//                     .out(1) → PrepCrawl
+//                        → FirecrawlStartCrawl
+//                          → ExtractCrawlId
+//                            → CheckCrawlStarted
+//                              → WaitCrawlStart
+//                                → PrepPoll
+//                                  → PollCrawlStatus
+//                                    → CheckCrawlDone
+//                                      → MergeCrawlData
+//                                        → ParseFirecrawlResults
+//                                          → WaitBeforePhase2Write
+//                                            → WriteFirecrawlEvidence
+//                                              → UpdateControlExecDone
 //                                                → LoopFirecrawl (↩ loop)
-//                                       .out(1) → WaitPollRetry
-//                                          → PrepPoll (↩ loop)
-//                               .out(1) → CrawlFailedFallback
-//                                  → ParseFirecrawlResults (↩ loop)
-//           .out(1) → SearchSerpapi
-//              → SearchSerpapi2
+//                                     .out(1) → WaitPollRetry
+//                                        → PrepPoll (↩ loop)
+//                             .out(1) → CrawlFailedFallback
+//                                → ParseFirecrawlResults (↩ loop)
+//           .out(1) → WaitBeforeSerpapi
+//              → SearchSerpapi
 //                → ParseSerpapiResults
 //                  → FetchHomepage
 //                    → BuildCandidateUrls
 //                      → FetchCandidate
 //                        → AggregateAndCompare
 //                          → LoopOverCompanies (↩ loop)
-//         .out(1) → WriteNoUrlEvidence
 // </workflow-map>
 
 // =====================================================================
@@ -93,7 +93,7 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 @workflow({
     id: 'DmaKVjkSXjdqbOnl',
     name: 'Trustscan Company Contacts  Stage 2 - MA',
-    active: true,
+    active: false,
     tags: ['Company Contacts'],
     settings: { executionOrder: 'v1', availableInMCP: false, binaryMode: 'separate' },
 })
@@ -143,15 +143,22 @@ export class TrustscanCompanyContactsStage2MaWorkflow {
     NormalizeInput = {
         mode: 'runOnceForEachItem',
         jsCode: `// Accepts both sheet columns (Run_ID / Entity_key / Final_url) and seed columns (RUN_ID / EntityKey / Final_URL)
+// Skip rows whose discovery flow already confirmed the URL doesn't respond —
+// scraping them is guaranteed to waste SerpAPI/Firecrawl budget.
+const respClass = String($json['Response_class'] || '').trim().toUpperCase();
+const SKIP_CLASSES = new Set(['URL_FINDED_NOT_RESPONDING']);
+
 const rawUrl = String($json['Final_url'] || $json['Final_URL'] || '').trim();
 let url = rawUrl;
 if (url && !url.startsWith('http')) url = 'https://' + url;
 url = url.replace(/\\/+$/, '');
+if (SKIP_CLASSES.has(respClass)) url = '';   // Gate Has URL will drop this item
 return {
   json: {
     RUN_ID:      String($json['Run_ID']    || $json['RUN_ID']    || '').trim(),
     EntityKey:   String($json['Entity_key'] || $json['EntityKey'] || '').trim(),
     Website_URL: url,
+    Response_class_in: respClass,
   },
 };
 `,
@@ -189,50 +196,11 @@ return {
     };
 
     @node({
-        id: 'ma-write-no-url-evidence',
-        name: 'Write No URL Evidence',
-        type: 'n8n-nodes-base.googleSheets',
-        version: 4.5,
-        position: [-32, -352],
-        credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
-    })
-    WriteNoUrlEvidence = {
-        operation: 'append',
-        documentId: {
-            __rl: true,
-            value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
-            mode: 'id',
-        },
-        sheetName: {
-            __rl: true,
-            value: 'CONTROL_EVIDENCE',
-            mode: 'name',
-        },
-        columns: {
-            mappingMode: 'defineBelow',
-            value: {
-                Run_ID: '={{ $json.RUN_ID }}',
-                Entity_key: '={{ $json.EntityKey }}',
-                'Field (phone | email | address)': '',
-                Value: '',
-                Source_url: 'No URL',
-                'Source_type  (input | serpapi | scrape | openai)': 'input',
-                Confidence: '',
-                Extracted_at: '={{ $now.setZone("Europe/Lisbon").toISO() }}',
-                SerpAPI_ContactUrls: '',
-            },
-            matchingColumns: [],
-            schema: [],
-        },
-        options: {},
-    };
-
-    @node({
         id: 'ma-update-ctrl-exec-stage2',
         name: 'Update Control Exec Stage 2',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [-32, -160],
+        position: [-64, -352],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
     })
@@ -280,11 +248,23 @@ return {
     };
 
     @node({
+        id: 'wait-before-serpapi',
+        webhookId: 'wait-before-serpapi-wh',
+        name: 'Wait Before SerpAPI',
+        type: 'n8n-nodes-base.wait',
+        version: 1.1,
+        position: [544, -32],
+    })
+    WaitBeforeSerpapi = {
+        amount: 2,
+    };
+
+    @node({
         id: '392f5d34-782d-4523-a166-8594bf0d2950',
         name: 'Search SerpAPI',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.3,
-        position: [512, -32],
+        position: [688, -32],
         credentials: { serpApi: { id: 'TPQCvbAqVDrs1oJp', name: 'SerpAPI account' } },
         alwaysOutputData: true,
     })
@@ -299,7 +279,7 @@ return {
                     name: '=q',
                     value: `={{
   $json.Website_URL
-    ? 'site:' + $json.Website_URL.replace(/^https?:\\/\\//i,'').replace(/\\/+$/,'') + ' (inurl:contact OR inurl:contacto OR inurl:apoio OR inurl:suporte OR inurl:fale OR inurl:atendimento OR inurl:sobre OR inurl:about OR inurl:legal)'
+    ? 'site:' + $json.Website_URL.replace(/^https?:\\/\\//i,'').replace(/^www\\./,'').replace(/\\/+$/,'')
     : $json.EntityKey + ' contacto email telefone'
 }}`,
                 },
@@ -318,73 +298,6 @@ return {
                 {
                     name: 'gl',
                     value: 'pt',
-                },
-                {
-                    name: 'filter',
-                    value: '0',
-                },
-                {
-                    name: 'num',
-                    value: '10',
-                },
-            ],
-        },
-        options: {
-            redirect: {
-                redirect: {},
-            },
-            response: {
-                response: {
-                    fullResponse: true,
-                },
-            },
-        },
-    };
-
-    @node({
-        id: 'serpapi-call2',
-        name: 'Search SerpAPI 2',
-        type: 'n8n-nodes-base.httpRequest',
-        version: 4.3,
-        position: [736, -32],
-        credentials: { serpApi: { id: 'TPQCvbAqVDrs1oJp', name: 'SerpAPI account' } },
-        alwaysOutputData: true,
-    })
-    SearchSerpapi2 = {
-        url: '=https://serpapi.com/search',
-        authentication: 'predefinedCredentialType',
-        nodeCredentialType: 'serpApi',
-        sendQuery: true,
-        queryParameters: {
-            parameters: [
-                {
-                    name: '=q',
-                    value: `={{
-  ($('Loop Over Companies').item.json.Website_URL
-    ? $('Loop Over Companies').item.json.Website_URL.replace(/^https?:\\/\\//i,'').replace(/\\/+$/,'').replace(/^www\\./,'')
-    : $('Loop Over Companies').item.json.EntityKey)
-  + ' contacto email telefone morada sede direccion headquarters'
-}}`,
-                },
-                {
-                    name: 'engine',
-                    value: 'google',
-                },
-                {
-                    name: 'google_domain',
-                    value: 'google.pt',
-                },
-                {
-                    name: 'hl',
-                    value: 'pt',
-                },
-                {
-                    name: 'gl',
-                    value: 'pt',
-                },
-                {
-                    name: 'filter',
-                    value: '0',
                 },
                 {
                     name: 'num',
@@ -412,7 +325,7 @@ return {
         position: [960, -32],
     })
     ParseSerpapiResults = {
-        jsCode: `// Merges results from both SerpAPI calls (call1=site: inurl, call2=entity+address keywords).
+        jsCode: `// Extracts contacts from SerpAPI site: query results (own-domain only).
 const trig = $('Loop Over Companies').item.json;
 
 const EMAIL_JUNK  = /\\.(png|jpe?g|gif|svg|webp|ico|js|css|woff2?|ttf)(\\?|$)|sentry\\.io|wixpress|@.*\\.wix|@sentry|@example|@domain|@email|@yourdomain|@company|@sitename|noreply@|no-reply@/i;
@@ -435,25 +348,19 @@ function trimAddress(raw) {
   var nm = /[\\s.]+(Telefone|Telemóvel|Telemovel|Tel\\b|Telf\\b|Tlf\\b|Fax\\b|Email\\b|NIF\\b|CONTATO|Contato|Contact|Actividade|Pagamentos|Vendas|River\\b|View\\b|Office\\b|Robert\\b|Código\\b|Codigo\\b|COMÉRCIO|COMERCIO|www\\.)/i.exec(t);
   if (nm && nm.index > 8) t = t.slice(0, nm.index);
 
-  // Step 3: anchor to postal code — PT (DDDD-DDD) or ES (5 digits standalone)
-  // After the postal code allow up to 30 chars for city name then cut
+  // Step 3: anchor to postal code — PT (DDDD-DDD) or ES (5 digits standalone).
+  // MANDATORY: if no postal code is present the snippet address is partial
+  // (e.g. "Rua Entre Vinhas ·" from a truncated Google snippet) — reject it and
+  // let the HTML scraper (whose trimAddr already enforces this rule) extract the
+  // authoritative full address. Mirrors §4.4's postal-code-required precision gate.
   var pm = /(\\d{4}-\\d{3})/.exec(t) || /(?<![\\d-])(\\d{5})(?![\\d-])/.exec(t);
-  if (pm) {
-    var after = t.slice(pm.index + pm[0].length);
-    var cityTail = after.match(/^[^.;|–—]{0,30}/);
-    t = t.slice(0, pm.index + pm[0].length) + (cityTail ? cityTail[0] : '');
-  }
+  if (!pm) return '';
+  var after = t.slice(pm.index + pm[0].length);
+  var cityTail = after.match(/^[^.;|–—·]{0,30}/);
+  t = t.slice(0, pm.index + pm[0].length) + (cityTail ? cityTail[0] : '');
 
-  // Step 4: country name as anchor — only cut here if no postal code follows within 20 chars
-  var cm = /\\b(PORTUGAL|Portugal|España|Espanha|Spain)\\b/.exec(t);
-  if (cm) {
-    var afterCountry = t.slice(cm.index + cm[0].length, cm.index + cm[0].length + 20);
-    var hasPostalAfter = /\\d{4}-\\d{3}|\\d{5}/.test(afterCountry);
-    if (!hasPostalAfter) t = t.slice(0, cm.index + cm[0].length);
-  }
-
-  // Step 5: final cap and strip trailing punctuation/spaces
-  return t.slice(0, 120).replace(/[\\s,\\.\\-]+$/, '').trim();
+  // Step 4: final cap and strip trailing punctuation/spaces (including middle dot)
+  return t.slice(0, 120).replace(/[\\s,\\.\\-·]+$/, '').trim();
 }
 
 function extractFromText(text) {
@@ -488,19 +395,14 @@ function rankEmail(emails, domain) {
   return emails[0];
 }
 
-// Pull both call results — call1 is $input, call2 from Search SerpAPI 2 (per-iteration)
+// Merges results from both SerpAPI calls.
 const call1Item = $input.first();
-const call2Item = $('Search SerpAPI 2').item;
 const body1 = call1Item?.json?.body || call1Item?.json || {};
-const body2 = call2Item?.json?.body || call2Item?.json || {};
 
-// Merge organic results from both calls
 const organic1 = Array.isArray(body1.organic_results) ? body1.organic_results : [];
-const organic2 = Array.isArray(body2.organic_results) ? body2.organic_results : [];
-const organic  = [...organic1, ...organic2];
 
-// Knowledge graph: prefer call1 (site: query returns more accurate KG), fall back to call2
-const kg = Object.keys(body1.knowledge_graph || {}).length ? (body1.knowledge_graph || {}) : (body2.knowledge_graph || {});
+// Knowledge graph: prefer call1 (site: query), fall back to call2 (branded)
+const kg = body1.knowledge_graph || {};
 
 // homeDomain from trigger
 const rawSite = trig.Website_URL || '';
@@ -511,19 +413,18 @@ const kgPhone   = kg.phone    ? kg.phone.replace(/[\\s.\\-()]/g, '').trim() : ''
 const kgAddress = kg.address  || kg.headquarters || '';
 const kgWebsite = kg.website  || '';
 
-// Track value → source URL — only use own-domain links as source
+// Track value → { url, sourceType } — all organic1 results are own-domain by definition
 const emailSourceMap = new Map();
 const phoneSourceMap = new Map();
 const addrSourceMap  = new Map();
 const allEmails = [], allPhones = [], allAddrs = [];
 
-for (const r of organic) {
+for (const r of organic1) {
   const link = String(r.link || '');
-  const isOwnDomain = homeDomain && link.toLowerCase().includes(homeDomain);
   const { emails, phones, addrs } = extractFromText((r.snippet || '') + ' ' + (r.title || ''));
-  for (const e of emails) { allEmails.push(e); if (isOwnDomain && !emailSourceMap.has(e)) emailSourceMap.set(e, link); }
-  for (const p of phones) { allPhones.push(p); if (isOwnDomain && !phoneSourceMap.has(p)) phoneSourceMap.set(p, link); }
-  for (const a of addrs)  { allAddrs.push(a);  if (isOwnDomain && !addrSourceMap.has(a))  addrSourceMap.set(a, link); }
+  for (const e of emails) { allEmails.push(e); if (!emailSourceMap.has(e)) emailSourceMap.set(e, { url: link, sourceType: 'serpapi' }); }
+  for (const p of phones) { allPhones.push(p); if (!phoneSourceMap.has(p)) phoneSourceMap.set(p, { url: link, sourceType: 'serpapi' }); }
+  for (const a of addrs)  { allAddrs.push(a);  if (!addrSourceMap.has(a))  addrSourceMap.set(a,  { url: link, sourceType: 'serpapi' }); }
 }
 
 const bestEmail   = kgEmail   || rankEmail(allEmails, homeDomain);
@@ -531,16 +432,16 @@ const bestPhone   = kgPhone   || phoneSourceMap.keys().next().value || allPhones
 const bestAddress = kgAddress || addrSourceMap.keys().next().value  || allAddrs[0]  || '';
 const websiteUrlClean = String(trig.Website_URL || '').trim();
 
-// Build SerpAPI_ContactUrls as a map: value → own-domain subpage URL
 const serpContactMap = {};
 if (bestEmail   && emailSourceMap.has(bestEmail))   serpContactMap[bestEmail]   = emailSourceMap.get(bestEmail);
 if (bestPhone   && phoneSourceMap.has(bestPhone))   serpContactMap[bestPhone]   = phoneSourceMap.get(bestPhone);
 if (bestAddress && addrSourceMap.has(bestAddress))  serpContactMap[bestAddress] = addrSourceMap.get(bestAddress);
 
-// Also track Url fields for AggregateAndCompare source attribution
+// SerpAPI_ContactUrls: own-domain subpage URLs likely to contain contact info
+const CONTACT_URL_RE = /contact|contacto|contactos|contato|contatos|apoio|suporte|fale|atendimento|sobre|about|legal|pag=|page=/i;
 const serpContactUrls = [...new Map(
-  organic
-    .filter(r => homeDomain && r.link && String(r.link).toLowerCase().includes(homeDomain))
+  organic1
+    .filter(r => homeDomain && r.link && String(r.link).toLowerCase().includes(homeDomain) && CONTACT_URL_RE.test(r.link))
     .map(r => [r.link, r.link])
 ).values()].slice(0, 5);
 
@@ -550,15 +451,15 @@ return [{
     EntityKey:            String(trig.EntityKey   || '').trim(),
     Website_URL:          websiteUrlClean,
     SerpAPI_Email:        bestEmail,
-    SerpAPI_Email_Url:    emailSourceMap.get(bestEmail) || websiteUrlClean,
+    SerpAPI_Email_Url:    (emailSourceMap.get(bestEmail) || {}).url || websiteUrlClean,
     SerpAPI_Phone:        bestPhone,
-    SerpAPI_Phone_Url:    phoneSourceMap.get(bestPhone) || websiteUrlClean,
+    SerpAPI_Phone_Url:    (phoneSourceMap.get(bestPhone) || {}).url || websiteUrlClean,
     SerpAPI_Address:      bestAddress,
-    SerpAPI_Address_Url:  addrSourceMap.get(bestAddress) || websiteUrlClean,
+    SerpAPI_Address_Url:  (addrSourceMap.get(bestAddress) || {}).url || websiteUrlClean,
     SerpAPI_Website:      kgWebsite,
     SerpAPI_ContactUrls:  serpContactUrls,
     SerpAPI_ContactMap:   serpContactMap,
-    SerpAPI_OrganicCount: organic.length,
+    SerpAPI_OrganicCount: organic1.length,
   },
 }];
 `,
@@ -569,7 +470,7 @@ return [{
         name: 'Fetch Homepage',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [1184, -32],
+        position: [1424, -32],
         onError: 'continueRegularOutput',
         retryOnFail: true,
         maxTries: 2,
@@ -619,7 +520,7 @@ return [{
         name: 'Build Candidate URLs',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1408, -32],
+        position: [1616, -32],
     })
     BuildCandidateUrls = {
         jsCode: `// Fan-out: homepage response → homepage item + ranked contact subpage items.
@@ -680,9 +581,9 @@ while ((m = re.exec(rawHomepage)) !== null && count++ < 500) {
   foundHrefs.add(abs.split('#')[0]);
 }
 
-const score = (u) => { const s = u.toLowerCase(); return /(contactos|contacto|contato|contact-us|contact\\/|contacts\\/|kontakt|get-in-touch|reach-us)/.test(s) ? 100 : /contact/.test(s) ? 40 : /(quem-somos|quien-somos|nosotros|about-us|who-we-are|sobre|empresa)/.test(s) ? 25 : /(equipa|equipo|our-team|team)/.test(s) ? 20 : /(legal|termos|impressum|imprint|privacy)/.test(s) ? 10 : 0; };
+const score = (u) => { const s = u.toLowerCase(); return /(contactos|contacto|contatos|contato|contact-us|contact\\/|contacts\\/|kontakt|get-in-touch|reach-us)/.test(s) ? 100 : /contact/.test(s) ? 40 : /(quem-somos|quien-somos|nosotros|about-us|who-we-are|sobre|empresa)/.test(s) ? 25 : /(equipa|equipo|our-team|team)/.test(s) ? 20 : /(legal|termos|impressum|imprint|privacy)/.test(s) ? 10 : 0; };
 const homepageKey = excel.Website_URL.replace(/\\/+$/, '');
-const subpages = [...new Set([...[...foundHrefs].filter(u => u.replace(/\\/+$/, '') !== homepageKey).sort((a,b) => score(b)-score(a)).slice(0,4), ...['/contactos','/contacto','/contact','/contact-us','/get-in-touch','/reach-us','/sobre-nos','/about','/about-us','/quien-somos','/nosotros','/quem-somos'].map(p => homeOrigin + p)])].filter(u => u.replace(/\\/+$/, '') !== homepageKey).slice(0, 8);
+const subpages = [...new Set([...[...foundHrefs].filter(u => u.replace(/\\/+$/, '') !== homepageKey).sort((a,b) => score(b)-score(a)).slice(0,4), ...['/contactos','/contacto','/contatos','/contato','/contact','/contact-us','/get-in-touch','/reach-us','/sobre-nos','/about','/about-us','/quien-somos','/nosotros','/quem-somos'].map(p => homeOrigin + p)])].filter(u => u.replace(/\\/+$/, '') !== homepageKey).slice(0, 8);
 
 return [emit(excel.Website_URL, 'homepage', rawHomepage, '', ''), ...subpages.map(u => emit(u, 'subpage', '', '', ''))];
 `,
@@ -693,8 +594,11 @@ return [emit(excel.Website_URL, 'homepage', rawHomepage, '', ''), ...subpages.ma
         name: 'Fetch Candidate',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [1632, -32],
+        position: [1792, -32],
         onError: 'continueRegularOutput',
+        retryOnFail: true,
+        maxTries: 2,
+        waitBetweenTries: 2000,
     })
     FetchCandidate = {
         url: '={{ $json.Candidate_URL || "https://invalid.invalid" }}',
@@ -731,7 +635,7 @@ return [emit(excel.Website_URL, 'homepage', rawHomepage, '', ''), ...subpages.ma
                     responseFormat: 'text',
                 },
             },
-            timeout: 12000,
+            timeout: 20000,
         },
     };
 
@@ -740,7 +644,7 @@ return [emit(excel.Website_URL, 'homepage', rawHomepage, '', ''), ...subpages.ma
         name: 'Aggregate And Compare',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1856, 112],
+        position: [1936, 128],
     })
     AggregateAndCompare = {
         jsCode: `// Collects all fetched HTML pages for one company and emits one row per contact item.
@@ -814,21 +718,21 @@ const extractFromJsonLd = (rawHtml) => {
 };
 
 const trimAddr = (raw) => {
-  var t = String(raw || '').replace(new RegExp('[\\t\\r\\n]+', 'g'), ' ').replace(new RegExp('  +', 'g'), ' ').trim();
-  t = t.replace(new RegExp('&#[0-9]+;', 'g'), '').replace(new RegExp('&[a-z]+;', 'g'), ' ').trim();
-  var nm = new RegExp('[\\s.]+(Telefone|Telef|Telemovel|Telemóvel|Tel[\\s:.]|Telf[\\s:.]|Fax[\\s:.]|Email[\\s:@]|NIF|CONTATO|Contato|Contact|www\\.)', 'i').exec(t);
+  var t = String(raw || '').replace(/[\\t\\r\\n]+/g, ' ').replace(/  +/g, ' ').trim();
+  t = t.replace(/&#[0-9]+;/g, '').replace(/&[a-z]+;/g, ' ').trim();
+  var nm = /[\\s.]+(Telefone|Telef|Telemovel|Telemóvel|Tel[\\s:.]|Telf[\\s:.]|Fax[\\s:.]|Email[\\s:@]|NIF|CONTATO|Contato|Contact|www\\.)/i.exec(t);
   if (nm && nm.index > 8) t = t.slice(0, nm.index);
-  var pm = new RegExp('(\\d{4}-\\d{3})').exec(t) || new RegExp('(?<![\\d-])(\\d{5})(?![\\d-])').exec(t);
+  var pm = /(\\d{4}-\\d{3})/.exec(t) || /(?<![\\d-])(\\d{5})(?![\\d-])/.exec(t);
   if (!pm) return '';
   var after = t.slice(pm.index + pm[0].length);
-  var ct = after.match(new RegExp('^[^.;|\\u2013\\u2014]{0,30}'));
+  var ct = after.match(/^[^.;|\\u2013\\u2014]{0,30}/);
   t = t.slice(0, pm.index + pm[0].length) + (ct ? ct[0] : '');
-  return t.slice(0, 120).replace(new RegExp('[\\s,\\.\\-]+$'), '').trim();
+  return t.slice(0, 120).replace(/[\\s,\\.\\-]+$/, '').trim();
 };
 const extractAddresses = (text) => {
-  const clean = String(text || '').replace(new RegExp('[\\t\\r\\n]+', 'g'), ' ').replace(new RegExp('  +', 'g'), ' ');
+  const clean = String(text || '').replace(/[\\t\\r\\n]+/g, ' ').replace(/  +/g, ' ');
   const found = new Set();
-  const streetRe = new RegExp('(?:Rua|R\\.\\s|Avenida|Av\\.\\s|Avda\\.\\s|Pra[\\u00e7c]a|Largo\\s|Estrada|Travessa|Cal[\\u00e7c]ada|Alameda|Beco\\s|Calle\\s|Carrer\\s|Passeig|Paseo|Plaza\\s|Edif[\\u00ed]cio|Edif\\.\\s|Pol\\.?\\s*Ind\\.)[^]{5,160}', 'g');
+  const streetRe = /(?:Rua|R\\.\\s|Avenida|Av\\.\\s|Avda\\.\\s|Pra[\\u00e7c]a|Largo\\s|Estrada|Travessa|Cal[\\u00e7c]ada|Alameda|Beco\\s|Calle\\s|Carrer\\s|Passeig|Paseo|Plaza\\s|Edif[\\u00ed]cio|Edif\\.\\s|Pol\\.?\\s*Ind\\.)[\\s\\S]{5,160}/g;
   let am;
   while ((am = streetRe.exec(clean)) !== null) {
     const a = trimAddr(am[0]);
@@ -838,31 +742,54 @@ const extractAddresses = (text) => {
 };
 
 let homepage_html = '';
-const subpage_htmls = [];
+const scrapeEmailMap = new Map();
+const scrapePhoneMap = new Map();
+const scrapeAddrMap  = new Map();
+
+// Collect subpages and homepage separately — subpages processed first for priority
+const subpageItems = []; // { url, idx }
+let homepageIdx = -1;
 for (let i = 0; i < meta.length; i++) {
-  const mm = meta[i].json, f = fetched[i]?.json || {};
+  const mm = meta[i].json;
   if (mm.Candidate_Kind === 'homepage') {
     homepage_html = String(mm.Homepage_HTML || '');
-  } else if (mm.Candidate_Kind === 'subpage' && !f.error && !(Number(f.statusCode||0)>=400)) {
-    const body = String(f.data||f.body||''); if (body) subpage_htmls.push(body);
+    homepageIdx = i;
+  } else if (mm.Candidate_Kind === 'subpage') {
+    subpageItems.push({ url: String(mm.Candidate_URL || websiteUrl), idx: i });
   }
 }
 
-// Subpages first (contact pages are more reliable) then homepage
-const rawBundle   = [...subpage_htmls, homepage_html].join('\\n\\n');
-const jl          = extractFromJsonLd(rawBundle);
-const cleanBundle = stripNoise(rawBundle);
-const scrapeEmails    = [...new Set([...jl.emails, ...extractEmails(cleanBundle)])].filter(e=>!EMAIL_JUNK.test(e));
-const scrapePhones    = [...new Set([...jl.phones, ...extractPhones(cleanBundle)])];
-const scrapeAddresses = extractAddresses(cleanBundle);
+// Process each page immediately and discard HTML — subpages first, then homepage
+const processPage = (html, srcUrl) => {
+  if (!html) return;
+  const jl = extractFromJsonLd(html);
+  for (const e of jl.emails) { if (!scrapeEmailMap.has(e)) scrapeEmailMap.set(e, srcUrl); }
+  for (const p of jl.phones) { if (!scrapePhoneMap.has(p)) scrapePhoneMap.set(p, srcUrl); }
+  const clean = stripNoise(html);
+  for (const e of extractEmails(clean))    { if (!EMAIL_JUNK.test(e) && !scrapeEmailMap.has(e)) scrapeEmailMap.set(e, srcUrl); }
+  for (const p of extractPhones(clean))    { if (!scrapePhoneMap.has(p)) scrapePhoneMap.set(p, srcUrl); }
+  for (const a of extractAddresses(clean)) { if (!scrapeAddrMap.has(a))  scrapeAddrMap.set(a,  srcUrl); }
+};
+
+// Subpages first (contact pages more reliable — win over homepage if same value)
+for (const sp of subpageItems) {
+  const f = fetched[sp.idx]?.json || {};
+  if (!f.error && !(Number(f.statusCode||0)>=400)) {
+    const body = String(f.data||f.body||'');
+    processPage(body, sp.url);
+  }
+}
+// Homepage last (lower priority)
+processPage(homepage_html, ''); // empty srcUrl = homepage = leave SerpAPI_ContactUrls blank
+
+const scrapeEmails    = [...scrapeEmailMap.keys()];
+const scrapePhones    = [...scrapePhoneMap.keys()];
+const scrapeAddresses = [...scrapeAddrMap.keys()];
 
 const serpEmail      = serpData.SerpAPI_Email      || '';
 const serpPhone      = serpData.SerpAPI_Phone      || '';
 const serpAddress    = serpData.SerpAPI_Address    || '';
 const serpWebsite    = serpData.SerpAPI_Website    || '';
-const serpEmailUrl   = serpData.SerpAPI_Email_Url   || websiteUrl;
-const serpPhoneUrl   = serpData.SerpAPI_Phone_Url   || websiteUrl;
-const serpAddressUrl = serpData.SerpAPI_Address_Url || websiteUrl;
 
 // SerpAPI takes priority: if SerpAPI found it, label serpapi and use its source URL
 const serpEmailSet = new Set(serpEmail ? [serpEmail.toLowerCase()] : []);
@@ -871,7 +798,6 @@ const serpPhoneSet = new Set(serpPhone ? [serpPhone]               : []);
 const allEmails    = [...new Set([...(serpEmail   ? [serpEmail]   : []), ...scrapeEmails])];
 const allPhones    = [...new Set([...(serpPhone   ? [serpPhone]   : []), ...scrapePhones])];
 const allAddresses = [...new Set([...(serpAddress ? [serpAddress] : []), ...scrapeAddresses])];
-const allWebsites  = [...new Set([websiteUrl, ...(serpWebsite ? [serpWebsite] : [])].filter(Boolean))];
 
 const scrapeStatus = !websiteUrl ? 'No_URL' : (meta.length===1 && meta[0].json.Error_Status) ? meta[0].json.Error_Status : 'Done';
 const now  = $now.setZone("Europe/Lisbon").toISO();
@@ -881,16 +807,20 @@ const serpContactUrls = Array.isArray(serpData.SerpAPI_ContactUrls) ? serpData.S
 const Has_Email   = allEmails.length > 0;
 const Has_Phone   = allPhones.length > 0;
 const Has_Address = allAddresses.length > 0;
-// SerpAPI_ContactMap: value → own-domain subpage where it was found (for the sheet)
+// SerpAPI_ContactMap: value → { url, sourceType }
 const serpContactMap = typeof serpData.SerpAPI_ContactMap === 'object' && serpData.SerpAPI_ContactMap !== null
   ? serpData.SerpAPI_ContactMap : {};
 
 const rows = [];
-for (const v of allEmails)    rows.push({ json: { ...base, 'Field (phone | email | address)': 'email',   Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': serpEmailSet.has(v.toLowerCase()) ? 'serpapi' : 'scrape', SerpAPI_ContactUrls: serpContactMap[v] || serpContactMap[v.toLowerCase()] || '' } });
-for (const v of allPhones)    rows.push({ json: { ...base, 'Field (phone | email | address)': 'phone',   Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': serpPhoneSet.has(v)                ? 'serpapi' : 'scrape', SerpAPI_ContactUrls: serpContactMap[v] || '' } });
+const getSerpType = (v) => { const e = serpContactMap[v] || serpContactMap[(v||'').toLowerCase()]; return e && typeof e === 'object' ? e.sourceType : (e ? 'serpapi' : null); };
+const getSerpUrl  = (v) => { const e = serpContactMap[v] || serpContactMap[(v||'').toLowerCase()]; return e && typeof e === 'object' ? e.url : (typeof e === 'string' ? e : ''); };
+// For scrape values: use per-page source map; empty string means found on homepage
+const getScrapeUrl = (v, map) => map.get(v) || map.get((v||'').toLowerCase()) || '';
+for (const v of allEmails)    rows.push({ json: { ...base, 'Field (phone | email | address)': 'email',   Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': serpEmailSet.has(v.toLowerCase()) ? (getSerpType(v) || 'serpapi') : 'scrape', SerpAPI_ContactUrls: serpEmailSet.has(v.toLowerCase()) ? getSerpUrl(v) : getScrapeUrl(v, scrapeEmailMap) } });
+for (const v of allPhones)    rows.push({ json: { ...base, 'Field (phone | email | address)': 'phone',   Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': serpPhoneSet.has(v)                ? (getSerpType(v) || 'serpapi') : 'scrape', SerpAPI_ContactUrls: serpPhoneSet.has(v)                ? getSerpUrl(v) : getScrapeUrl(v, scrapePhoneMap) } });
 const serpAddrSet = new Set(serpAddress ? [serpAddress] : []);
-for (const v of allAddresses) rows.push({ json: { ...base, 'Field (phone | email | address)': 'address', Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': serpAddrSet.has(v) ? 'serpapi' : 'scrape', SerpAPI_ContactUrls: serpContactMap[v] || '' } });
-if (rows.length === 0) rows.push({ json: { ...base, 'Field (phone | email | address)': '', Value: '', Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': 'none', SerpAPI_ContactUrls: '' } });
+for (const v of allAddresses) rows.push({ json: { ...base, 'Field (phone | email | address)': 'address', Value: v, Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': serpAddrSet.has(v)                ? (getSerpType(v) || 'serpapi') : 'scrape', SerpAPI_ContactUrls: serpAddrSet.has(v)                ? getSerpUrl(v) : getScrapeUrl(v, scrapeAddrMap) } });
+if (rows.length === 0) rows.push({ json: { ...base, 'Field (phone | email | address)': '', Value: '', Source_url: websiteUrl, 'Source_type  (input | serpapi | scrape | openai)': '', SerpAPI_ContactUrls: '' } });
 return rows;
 `,
     };
@@ -902,6 +832,9 @@ return rows;
         version: 4.5,
         position: [688, -464],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
+        retryOnFail: true,
+        maxTries: 5,
+        waitBetweenTries: 30000,
     })
     WriteToControlEvidence = {
         operation: 'append',
@@ -1132,42 +1065,6 @@ return unique;
                 },
             ],
             combinator: 'and',
-        },
-        options: {},
-    };
-
-    @node({
-        id: 'ma-update-ctrl-exec-firecrawl',
-        name: 'Update Control Exec Firecrawl',
-        type: 'n8n-nodes-base.googleSheets',
-        version: 4.7,
-        position: [1584, -560],
-        credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
-        alwaysOutputData: true,
-    })
-    UpdateControlExecFirecrawl = {
-        operation: 'appendOrUpdate',
-        documentId: {
-            __rl: true,
-            value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
-            mode: 'id',
-        },
-        sheetName: {
-            __rl: true,
-            value: 'CONTROL_EXEC',
-            mode: 'name',
-        },
-        columns: {
-            mappingMode: 'defineBelow',
-            value: {
-                Exec_key: '={{ $json.RUN_ID + "_" + $json.EntityKey }}',
-                Queued_action: 'FIRECRAWL',
-                Updated_at: '={{ $now.setZone("Europe/Lisbon").toISO() }}',
-            },
-            matchingColumns: ['Exec_key'],
-            schema: [],
-            attemptToConvertTypes: false,
-            convertFieldsToString: false,
         },
         options: {},
     };
@@ -1602,7 +1499,9 @@ return rows;
         version: 1.1,
         position: [4048, -688],
     })
-    WaitBeforePhase2Write = {};
+    WaitBeforePhase2Write = {
+        amount: 15,
+    };
 
     @node({
         id: 'fc-write-firecrawl-evidence',
@@ -1611,6 +1510,9 @@ return rows;
         version: 4.5,
         position: [4256, -448],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
+        retryOnFail: true,
+        maxTries: 5,
+        waitBetweenTries: 30000,
     })
     WriteFirecrawlEvidence = {
         operation: 'append',
@@ -1717,6 +1619,46 @@ return rows;
     };
 
     @node({
+        id: 'fc-update-ctrl-exec-done',
+        name: 'Update Control Exec Done',
+        type: 'n8n-nodes-base.googleSheets',
+        version: 4.5,
+        position: [4480, -448],
+        credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
+        alwaysOutputData: true,
+        retryOnFail: true,
+        maxTries: 5,
+        waitBetweenTries: 30000,
+    })
+    UpdateControlExecDone = {
+        operation: 'appendOrUpdate',
+        documentId: {
+            __rl: true,
+            value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
+            mode: 'id',
+        },
+        sheetName: {
+            __rl: true,
+            value: 'CONTROL_EXEC',
+            mode: 'name',
+        },
+        columns: {
+            mappingMode: 'defineBelow',
+            value: {
+                Exec_key: '={{ $json.Run_ID + "_" + $json.Entity_key }}',
+                Queued_action: 'FIRECRAWL',
+                Process_Status: 'DONE',
+                Updated_at: '={{ $now.setZone("Europe/Lisbon").toISO() }}',
+            },
+            matchingColumns: ['Exec_key'],
+            schema: [],
+            attemptToConvertTypes: false,
+            convertFieldsToString: false,
+        },
+        options: {},
+    };
+
+    @node({
         id: '45688f6f-d67b-459b-8548-7a04e2fafa93',
         name: 'Sticky Note',
         type: 'n8n-nodes-base.stickyNote',
@@ -1726,7 +1668,8 @@ return rows;
     StickyNote = {
         content: '## SerpAPI and Scraper',
         height: 448,
-        width: 1824,
+        width: 1872,
+        color: 6,
     };
 
     @node({
@@ -1739,8 +1682,47 @@ return rows;
     StickyNote1 = {
         content: '## FireCrawl',
         height: 736,
-        width: 4096,
+        width: 4288,
         color: 6,
+    };
+
+    @node({
+        id: 'scraper-update-ctrl-exec-done',
+        name: 'Update Control Exec Scraper Done',
+        type: 'n8n-nodes-base.googleSheets',
+        version: 4.5,
+        position: [1280, -752],
+        credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
+        alwaysOutputData: true,
+        retryOnFail: true,
+        maxTries: 5,
+        waitBetweenTries: 30000,
+    })
+    UpdateControlExecScraperDone = {
+        operation: 'appendOrUpdate',
+        documentId: {
+            __rl: true,
+            value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
+            mode: 'id',
+        },
+        sheetName: {
+            __rl: true,
+            value: 'CONTROL_EXEC',
+            mode: 'name',
+        },
+        columns: {
+            mappingMode: 'defineBelow',
+            value: {
+                Exec_key: '={{ $json.RUN_ID + "_" + $json.EntityKey }}',
+                Process_Status: 'DONE',
+                Updated_at: '={{ $now.setZone("Europe/Lisbon").toISO() }}',
+            },
+            matchingColumns: ['Exec_key'],
+            schema: [],
+            attemptToConvertTypes: false,
+            convertFieldsToString: false,
+        },
+        options: {},
     };
 
     // =====================================================================
@@ -1754,11 +1736,10 @@ return rows;
         this.NormalizeInput.out(0).to(this.GateHasUrl.in(0));
         this.GateHasUrl.out(0).to(this.UpdateControlExecStage2.in(0));
         this.GateHasUrl.out(0).to(this.LoopOverCompanies.in(0));
-        this.GateHasUrl.out(1).to(this.WriteNoUrlEvidence.in(0));
         this.LoopOverCompanies.out(0).to(this.WaitBeforePhase1Write.in(0));
-        this.LoopOverCompanies.out(1).to(this.SearchSerpapi.in(0));
-        this.SearchSerpapi.out(0).to(this.SearchSerpapi2.in(0));
-        this.SearchSerpapi2.out(0).to(this.ParseSerpapiResults.in(0));
+        this.LoopOverCompanies.out(1).to(this.WaitBeforeSerpapi.in(0));
+        this.WaitBeforeSerpapi.out(0).to(this.SearchSerpapi.in(0));
+        this.SearchSerpapi.out(0).to(this.ParseSerpapiResults.in(0));
         this.ParseSerpapiResults.out(0).to(this.FetchHomepage.in(0));
         this.FetchHomepage.out(0).to(this.BuildCandidateUrls.in(0));
         this.BuildCandidateUrls.out(0).to(this.FetchCandidate.in(0));
@@ -1767,9 +1748,9 @@ return rows;
         this.WaitBeforePhase1Write.out(0).to(this.WriteToControlEvidence.in(0));
         this.WriteToControlEvidence.out(0).to(this.DeduplicateCompanies.in(0));
         this.DeduplicateCompanies.out(0).to(this.CheckMissingFields.in(0));
+        this.CheckMissingFields.out(0).to(this.UpdateControlExecScraperDone.in(0));
         this.CheckMissingFields.out(1).to(this.LoopFirecrawl.in(0));
-        this.LoopFirecrawl.out(1).to(this.UpdateControlExecFirecrawl.in(0));
-        this.UpdateControlExecFirecrawl.out(0).to(this.PrepCrawl.in(0));
+        this.LoopFirecrawl.out(1).to(this.PrepCrawl.in(0));
         this.PrepCrawl.out(0).to(this.FirecrawlStartCrawl.in(0));
         this.FirecrawlStartCrawl.out(0).to(this.ExtractCrawlId.in(0));
         this.ExtractCrawlId.out(0).to(this.CheckCrawlStarted.in(0));
@@ -1785,6 +1766,7 @@ return rows;
         this.MergeCrawlData.out(0).to(this.ParseFirecrawlResults.in(0));
         this.ParseFirecrawlResults.out(0).to(this.WaitBeforePhase2Write.in(0));
         this.WaitBeforePhase2Write.out(0).to(this.WriteFirecrawlEvidence.in(0));
-        this.WriteFirecrawlEvidence.out(0).to(this.LoopFirecrawl.in(0));
+        this.WriteFirecrawlEvidence.out(0).to(this.UpdateControlExecDone.in(0));
+        this.UpdateControlExecDone.out(0).to(this.LoopFirecrawl.in(0));
     }
 }
