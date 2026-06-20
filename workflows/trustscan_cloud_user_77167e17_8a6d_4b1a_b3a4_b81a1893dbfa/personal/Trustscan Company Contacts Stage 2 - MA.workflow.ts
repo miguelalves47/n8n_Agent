@@ -1127,7 +1127,7 @@ return [{ json: { RUN_ID: String(item.RUN_ID || "").trim(), EntityKey: String(it
             parameters: [
                 {
                     name: 'Authorization',
-                    value: 'Bearer fc-bcb07136c3e64a7a8ab7c51dcf397568',
+                    value: '',
                 },
                 {
                     name: 'Content-Type',
@@ -1280,7 +1280,7 @@ return [{ json: {
             parameters: [
                 {
                     name: 'Authorization',
-                    value: 'Bearer fc-bcb07136c3e64a7a8ab7c51dcf397568',
+                    value: '',
                 },
             ],
         },
