@@ -146,7 +146,7 @@ export class TrustscanCompanyContactsStage2MaWorkflow {
 // Skip rows whose discovery flow already confirmed the URL doesn't respond —
 // scraping them is guaranteed to waste SerpAPI/Firecrawl budget.
 const respClass = String($json['Response_class'] || '').trim().toUpperCase();
-const SKIP_CLASSES = new Set(['URL_FINDED_NOT_RESPONDING']);
+const SKIP_CLASSES = new Set(['URL_FOUND_NOT_RESPONDING']);
 
 const rawUrl = String($json['Final_url'] || $json['Final_URL'] || '').trim();
 let url = rawUrl;
@@ -859,6 +859,7 @@ return rows;
                 'Source_type  (input | serpapi | scrape | openai)':
                     '={{ $json["Source_type  (input | serpapi | scrape | openai)"] }}',
                 Confidence: '',
+                Hint_url: '={{ $json.SerpAPI_ContactUrls }}',
                 Extracted_at: '={{ $json.Extracted_at }}',
                 SerpAPI_ContactUrls: '={{ $json.SerpAPI_ContactUrls }}',
             },
@@ -927,6 +928,16 @@ return rows;
                 {
                     id: 'Confidence',
                     displayName: 'Confidence',
+                    required: false,
+                    defaultMatch: false,
+                    display: true,
+                    type: 'string',
+                    canBeUsedToMatch: false,
+                    removed: false,
+                },
+                {
+                    id: 'Hint_url',
+                    displayName: 'Hint_url',
                     required: false,
                     defaultMatch: false,
                     display: true,
@@ -1589,6 +1600,16 @@ return rows;
                     display: true,
                     type: 'string',
                     canBeUsedToMatch: true,
+                    removed: false,
+                },
+                {
+                    id: 'Hint_url',
+                    displayName: 'Hint_url',
+                    required: false,
+                    defaultMatch: false,
+                    display: true,
+                    type: 'string',
+                    canBeUsedToMatch: false,
                     removed: false,
                 },
                 {

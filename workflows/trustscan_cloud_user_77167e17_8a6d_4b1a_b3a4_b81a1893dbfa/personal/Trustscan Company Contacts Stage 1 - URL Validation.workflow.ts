@@ -327,6 +327,8 @@ inputRow = toIntOrNull(inputRow);
 const nipc = toStr(pickFirst(input.nipc, input.NIPC));
 const entidade = toStr(pickFirst(input.entidade, input.Entidade));
 
+if (!nipc && !entidade) return null;
+
 const entityKey =
   nipc ||
   entidade ||
@@ -644,7 +646,7 @@ return {
         alwaysOutputData: true,
     })
     AuditAppendUrlChecksHttpOk = {
-        operation: 'append',
+        operation: 'appendOrUpdate',
         documentId: {
             __rl: true,
             value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
@@ -675,9 +677,9 @@ return {
                 Request_method: 'HEAD',
                 Final_url: '={{ $json.final_url }}',
                 Network_error: '={{ $json.network_error }}',
-                Exec_key: '=§ {{ $json.run_id }}',
+                Exec_key: '={{ $json.run_id }}_{{ $json.entity_key }}',
             },
-            matchingColumns: [],
+            matchingColumns: ['Exec_key'],
             schema: [
                 {
                     id: 'Exec_key',
@@ -968,7 +970,7 @@ return {
         alwaysOutputData: true,
     })
     AuditAppendUrlChecksHttpErr = {
-        operation: 'append',
+        operation: 'appendOrUpdate',
         documentId: {
             __rl: true,
             value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
@@ -1001,7 +1003,7 @@ return {
                 Final_url: '={{ $json.final_url || $json.request_url }}',
                 Exec_key: "={{$json.exec_key || ''}}",
             },
-            matchingColumns: [],
+            matchingColumns: ['Exec_key'],
             schema: [
                 {
                     id: 'Exec_key',
@@ -1304,7 +1306,7 @@ return {
         alwaysOutputData: true,
     })
     AuditAppendUrlChecksNoUrl = {
-        operation: 'append',
+        operation: 'appendOrUpdate',
         documentId: {
             __rl: true,
             value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
@@ -1333,7 +1335,7 @@ return {
                 Request_method: 'None',
                 Exec_key: '={{ $json.exec_key }}',
             },
-            matchingColumns: [],
+            matchingColumns: ['Exec_key'],
             schema: [
                 {
                     id: 'Exec_key',
@@ -1785,7 +1787,7 @@ return {
         alwaysOutputData: true,
     })
     AuditAppendUrlChecksHttpOk1 = {
-        operation: 'append',
+        operation: 'appendOrUpdate',
         documentId: {
             __rl: true,
             value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
@@ -1818,7 +1820,7 @@ return {
                 Request_method: 'GET',
                 Exec_key: '={{$json.exec_key}}',
             },
-            matchingColumns: [],
+            matchingColumns: ['Exec_key'],
             schema: [
                 {
                     id: 'Exec_key',
@@ -2016,7 +2018,7 @@ return $input.item;`,
         alwaysOutputData: true,
     })
     StateUpsertSnapshot = {
-        operation: 'append',
+        operation: 'appendOrUpdate',
         documentId: {
             __rl: true,
             value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
@@ -2051,20 +2053,9 @@ return $input.item;`,
                 Nome: '={{ $json.Nome }}',
                 NIPC: '={{ $json.NIPC }}',
                 Entidade: '={{ $json.Entidade }}',
-                Processed: '=',
             },
-            matchingColumns: ['Exec_KEY'],
+            matchingColumns: ['NIPC'],
             schema: [
-                {
-                    id: 'Processed',
-                    displayName: 'Processed',
-                    required: false,
-                    defaultMatch: false,
-                    display: true,
-                    type: 'string',
-                    canBeUsedToMatch: true,
-                    removed: false,
-                },
                 {
                     id: 'Entidade',
                     displayName: 'Entidade',
@@ -2079,7 +2070,7 @@ return $input.item;`,
                     id: 'NIPC',
                     displayName: 'NIPC',
                     required: false,
-                    defaultMatch: false,
+                    defaultMatch: true,
                     display: true,
                     type: 'string',
                     canBeUsedToMatch: true,
@@ -3931,7 +3922,7 @@ return {
         alwaysOutputData: false,
     })
     AuditAppendUrlChecksHttpErr1 = {
-        operation: 'append',
+        operation: 'appendOrUpdate',
         documentId: {
             __rl: true,
             value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
@@ -3964,7 +3955,7 @@ return {
                 Exec_key: "={{$json.exec_key || ''}}",
                 Request_method: 'HEAD',
             },
-            matchingColumns: [],
+            matchingColumns: ['Exec_key'],
             schema: [
                 {
                     id: 'Exec_key',
@@ -4622,7 +4613,7 @@ return {
         alwaysOutputData: true,
     })
     AuditAppendUrlChecksHttpOk11 = {
-        operation: 'append',
+        operation: 'appendOrUpdate',
         documentId: {
             __rl: true,
             value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
@@ -4655,7 +4646,7 @@ return {
                 Request_method: 'GET',
                 Exec_key: '={{$json.exec_key}}',
             },
-            matchingColumns: [],
+            matchingColumns: ['Exec_key'],
             schema: [
                 {
                     id: 'Exec_key',
@@ -5576,7 +5567,7 @@ return {
         alwaysOutputData: true,
     })
     AuditAppendUrlChecksHttp = {
-        operation: 'append',
+        operation: 'appendOrUpdate',
         documentId: {
             __rl: true,
             value: '1itG_bRvm-oND6i0S2SyjB_9YMRSwCI3Uayvm6DVSwEE',
@@ -5609,7 +5600,7 @@ return {
                 Exec_key: "={{$json.exec_key || ''}}",
                 Request_method: 'HEAD - HTTP',
             },
-            matchingColumns: [],
+            matchingColumns: ['Exec_key'],
             schema: [
                 {
                     id: 'Exec_key',

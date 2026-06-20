@@ -146,7 +146,7 @@ export class UrlDiscoverStage21Workflow {
     JoinAndFilter = {
         jsCode: `// Inner-join URL_CHECKS rows where Response_class = NO_URL with INPUT_SNAPSHOT
 // to attach NOME (company name) and NIPC (fiscal number). Filters:
-//   - skip rows where Response_class = NO_URL_FINDED (loop guard)
+//   - skip rows where Response_class = NO_URL_FOUND (loop guard)
 //   - skip entities with empty/non-9-digit NIPC (PT-only)
 const checks   = $('Read URL Checks').all();
 const snapshot = $('Read Input Snapshot').all();
@@ -174,7 +174,7 @@ for (const it of checks) {
   const status = String(j['Response_class'] || '').trim().toUpperCase();
   const ek = String(j['Entity_key'] || j['EntityKey'] || '').trim();
   if (!ek || seen.has(ek)) continue;            // dedup if URL_CHECKS has multiple rows per entity
-  if (status !== 'NO_URL') continue;            // only target NO_URL rows; skip NO_URL_FINDED + 2xx/3xx/4xx/5xx
+  if (status !== 'NO_URL') continue;            // only target NO_URL rows; skip NO_URL_FOUND + 2xx/3xx/4xx/5xx
   const meta = byEntity.get(ek);
   if (!meta || !meta.Company_name) continue;     // need a name to build a search query
   const nipcDigits = String(meta.NIPC).replace(/\\D/g, '');
@@ -537,7 +537,7 @@ return [{
     Nif_in_snippet: trig.Nif_in_snippet,
     Nif_on_page:    nifFound,
     Nif_page_url:   nifPage,
-    Discovery_outcome: nifFound ? 'URL_DISCOVERED' : 'NO_URL_FINDED',
+    Discovery_outcome: nifFound ? 'URL_DISCOVERED' : 'NO_URL_FOUND',
   },
 }];
 `,
@@ -589,7 +589,7 @@ return [{
     RUN_ID:       j.RUN_ID,
     EntityKey:    j.EntityKey,
     Candidate_URL: '',
-    Discovery_outcome: 'NO_URL_FINDED',
+    Discovery_outcome: 'NO_URL_FOUND',
   },
 }];
 `,
@@ -689,7 +689,7 @@ return [{
                 Exec_key: '={{ $json.RUN_ID + "_" + $json.EntityKey }}',
                 Run_ID: '={{ $json.RUN_ID }}',
                 Entity_key: '={{ $json.EntityKey }}',
-                Response_class: 'NO_URL_FINDED',
+                Response_class: 'NO_URL_FOUND',
             },
             matchingColumns: ['Entity_key'],
             schema: [],

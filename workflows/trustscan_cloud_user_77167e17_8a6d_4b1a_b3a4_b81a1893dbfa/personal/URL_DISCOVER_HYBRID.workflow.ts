@@ -677,7 +677,7 @@ let fallbackUsed = false;
 //           company's official site — independent confirmation)
 //   Tier 2: OpenAI websearch result whose own pre-judge confidence was
 //           high or medium
-// Anything outside these two tiers stays as NO_CANDIDATE and lands in NO_URL_FINDED.
+// Anything outside these two tiers stays as NO_CANDIDATE and lands in NO_URL_FOUND.
 if ((!url || !host) && Array.isArray(trig.Candidates) && trig.Candidates.length) {
   const oaiConfTop = String(trig.OpenAI_websearch_confidence || 'none').toLowerCase();
   const TRUSTED = (c) => {
@@ -914,14 +914,14 @@ for (let i = 0; i < fetched.length; i++) {
 //                               homepage responds. Both are deterministic
 //                               matches of the company's NIPC digits.
 //   URL_LIKELY                — candidate URL + homepage responded
-//   URL_FINDED_NOT_RESPONDING — candidate URL but homepage didn't load (DNS fail,
+//   URL_FOUND_NOT_RESPONDING — candidate URL but homepage didn't load (DNS fail,
 //                               ECONNREFUSED, all-404). Keep the URL for retry.
 const snippetNifMatch = Boolean(trig.Snippet_nif_match);
 let outcome;
 if (nifFound) outcome = 'URL_DISCOVERED';
 else if (snippetNifMatch && homepageReachable) outcome = 'URL_DISCOVERED';
 else if (homepageReachable) outcome = 'URL_LIKELY';
-else outcome = 'URL_FINDED_NOT_RESPONDING';
+else outcome = 'URL_FOUND_NOT_RESPONDING';
 
 return [{
   json: {
@@ -942,7 +942,7 @@ return [{
     Nif_in_snippet:  snippetNifMatch,
     Homepage_reachable: homepageReachable,
     Content_type:    contentType,
-    Has_url:         outcome !== 'NO_URL_FINDED',
+    Has_url:         outcome !== 'NO_URL_FOUND',
     Discovery_outcome: outcome,
   },
 }];
@@ -995,7 +995,7 @@ return [{
     EntityKey:     j.EntityKey,
     Candidate_URL: '',
     Source_signal: 'none',
-    Discovery_outcome: 'NO_URL_FINDED',
+    Discovery_outcome: 'NO_URL_FOUND',
   },
 }];
 `,
@@ -1099,7 +1099,7 @@ return [{
                 Exec_key: '={{ $json.RUN_ID + "_" + $json.EntityKey }}',
                 Run_ID: '={{ $json.RUN_ID }}',
                 Entity_key: '={{ $json.EntityKey }}',
-                Response_class: 'NO_URL_FINDED',
+                Response_class: 'NO_URL_FOUND',
                 Source_signal: '={{ $json.Source_signal }}',
             },
             matchingColumns: ['Entity_key'],

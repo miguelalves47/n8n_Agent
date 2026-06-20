@@ -146,7 +146,7 @@ export class UrlDiscoverOpenaiWorkflow {
     JoinAndFilter = {
         jsCode: `// Inner-join URL_CHECKS rows where Response_class = NO_URL with INPUT_SNAPSHOT
 // to attach NOME (company name) and NIPC (fiscal number). Filters:
-//   - skip rows where Response_class = NO_URL_FINDED (loop guard)
+//   - skip rows where Response_class = NO_URL_FOUND (loop guard)
 //   - skip entities with empty/non-9-digit NIPC (PT-only)
 const checks   = $('Read URL Checks').all();
 const snapshot = $('Read Input Snapshot').all();
@@ -480,7 +480,7 @@ return paths.map(p => ({
 // Outcome ladder:
 //   URL_DISCOVERED — NIF appears on at least one fetched page (high precision)
 //   URL_LIKELY     — homepage reachable + OpenAI confidence high/medium, NIF not found
-//   NO_URL_FINDED  — neither: hallucinated domain, no reachable page, or OpenAI low/none
+//   NO_URL_FOUND  — neither: hallucinated domain, no reachable page, or OpenAI low/none
 const fetched = $input.all();
 const meta    = $('Build Subpage URLs').all();
 const trig    = $('Parse OpenAI Result').item.json;
@@ -522,7 +522,7 @@ const conf = String(trig.Openai_confidence || 'none').toLowerCase();
 let outcome;
 if (nifFound) outcome = 'URL_DISCOVERED';
 else if (homepageReachable && (conf === 'high' || conf === 'medium')) outcome = 'URL_LIKELY';
-else outcome = 'NO_URL_FINDED';
+else outcome = 'NO_URL_FOUND';
 
 return [{
   json: {
@@ -539,7 +539,7 @@ return [{
     Nif_on_page:    nifFound,
     Nif_page_url:   nifPage,
     Homepage_reachable: homepageReachable,
-    Has_url:        outcome !== 'NO_URL_FINDED',
+    Has_url:        outcome !== 'NO_URL_FOUND',
     Discovery_outcome: outcome,
   },
 }];
@@ -591,7 +591,7 @@ return [{
     RUN_ID:       j.RUN_ID,
     EntityKey:    j.EntityKey,
     Candidate_URL: '',
-    Discovery_outcome: 'NO_URL_FINDED',
+    Discovery_outcome: 'NO_URL_FOUND',
   },
 }];
 `,
@@ -691,7 +691,7 @@ return [{
                 Exec_key: '={{ $json.RUN_ID + "_" + $json.EntityKey }}',
                 Run_ID: '={{ $json.RUN_ID }}',
                 Entity_key: '={{ $json.EntityKey }}',
-                Response_class: 'NO_URL_FINDED',
+                Response_class: 'NO_URL_FOUND',
             },
             matchingColumns: ['Entity_key'],
             schema: [],
