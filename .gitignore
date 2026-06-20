@@ -98,5 +98,6 @@ n8nac.cmd
 workflows/**
 !workflows/**/
 !workflows/**/*.workflow.ts
+!workflows/**/*.md
 !.github/workflows/
 !.github/workflows/**
