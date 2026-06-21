@@ -133,8 +133,8 @@ jobs:
           VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
         run: |
           if [[ -z "$VSCE_TOKEN" ]]; then
-            echo "❌ VSCE_TOKEN is missing in prod secrets."
-            exit 1
+            echo "⚠️ VSCE_TOKEN is missing, skipping VS Code Marketplace publish."
+            exit 0
           fi
 
           cd packages/vscode-extension
@@ -551,8 +551,8 @@ jobs:
           VSCE_TOKEN: ${{ secrets.VSCE_TOKEN }}
         run: |
           if [[ -z "$VSCE_TOKEN" ]]; then
-            echo "❌ VSCE_TOKEN is missing in next secrets."
-            exit 1
+            echo "⚠️ VSCE_TOKEN is missing, skipping VS Code Marketplace prerelease publish."
+            exit 0
           fi
 
           cd packages/vscode-extension
