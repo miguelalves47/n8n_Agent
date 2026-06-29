@@ -1,7 +1,7 @@
 import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
-// Workflow : URL_DISCOVER_STAGE_2.1
+// Workflow : Trustscan Company Contacts - Stage 1.2.1
 // Nodes   : 19  |  Connections: 22
 //
 // NODE INDEX
@@ -60,11 +60,11 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 @workflow({
     id: '1ElFDAJzMjMy9kaK',
-    name: 'URL_DISCOVER_STAGE_2.1',
+    name: 'Trustscan Company Contacts - Stage 1.2.1',
     active: false,
     settings: { executionOrder: 'v1', binaryMode: 'separate' },
 })
-export class UrlDiscoverStage21Workflow {
+export class TrustscanCompanyContactsStage121Workflow {
     // =====================================================================
     // CONFIGURATION DES NOEUDS
     // =====================================================================
@@ -83,7 +83,7 @@ export class UrlDiscoverStage21Workflow {
         name: 'Read URL Checks',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [-960, -100],
+        position: [-1008, -96],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     ReadUrlChecks = {
@@ -105,7 +105,7 @@ export class UrlDiscoverStage21Workflow {
         name: 'Read Input Snapshot',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [-960, 100],
+        position: [-1008, 128],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     ReadInputSnapshot = {
@@ -127,12 +127,10 @@ export class UrlDiscoverStage21Workflow {
         name: 'Merge Reads',
         type: 'n8n-nodes-base.merge',
         version: 3.2,
-        position: [-840, 0],
+        position: [-848, 0],
     })
     MergeReads = {
         mode: 'chooseBranch',
-        chooseBranchMode: 'waitForAll',
-        output: 'specifiedInput',
         useDataOfInput: '1',
     };
 
@@ -412,7 +410,7 @@ return [{
         name: 'Build Subpage URLs',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [720, -150],
+        position: [720, -144],
     })
     BuildSubpageUrls = {
         jsCode: `// Fan-out: emit homepage + 6 contact-style subpage URLs for the candidate host.
@@ -440,7 +438,7 @@ return paths.map(p => ({
         name: 'Fetch Page',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [960, -150],
+        position: [960, -144],
         onError: 'continueRegularOutput',
         retryOnFail: true,
         maxTries: 2,
@@ -486,7 +484,7 @@ return paths.map(p => ({
         name: 'Validate NIF On Pages',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1200, -150],
+        position: [1200, -144],
     })
     ValidateNifOnPages = {
         jsCode: `// Strip HTML, decode entities, search for digits-only NIF across all fetched pages.
@@ -548,7 +546,7 @@ return [{
         name: 'Gate NIF Found',
         type: 'n8n-nodes-base.if',
         version: 2.2,
-        position: [1440, -150],
+        position: [1440, -144],
     })
     GateNifFound = {
         conditions: {
@@ -579,7 +577,7 @@ return [{
         name: 'Prep Failure (No Candidate)',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [720, 150],
+        position: [720, 160],
     })
     PrepFailureNoCandidate = {
         jsCode: `// Pass-through with explicit failure outcome for the NO_CANDIDATE branch.
@@ -601,7 +599,7 @@ return [{
         name: 'Wait Before Success Write',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [1680, -200],
+        position: [1680, -208],
     })
     WaitBeforeSuccessWrite = {
         amount: 2,
@@ -613,7 +611,7 @@ return [{
         name: 'Wait Before Failure Write',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [1680, 200],
+        position: [1680, 208],
     })
     WaitBeforeFailureWrite = {
         amount: 2,
@@ -624,7 +622,7 @@ return [{
         name: 'Upsert URL_CHECKS (Success)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [1920, -200],
+        position: [1920, -208],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         retryOnFail: true,
         maxTries: 5,
@@ -665,7 +663,7 @@ return [{
         name: 'Upsert URL_CHECKS (Failure)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [1920, 200],
+        position: [1920, 208],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         retryOnFail: true,
         maxTries: 5,

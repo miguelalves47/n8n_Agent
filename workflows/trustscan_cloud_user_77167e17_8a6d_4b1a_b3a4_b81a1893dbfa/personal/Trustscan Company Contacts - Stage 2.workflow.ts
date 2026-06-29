@@ -1,7 +1,7 @@
 import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
-// Workflow : Trustscan Company Contacts  Stage 2 - MA
+// Workflow : Trustscan Company Contacts - Stage 2
 // Nodes   : 36  |  Connections: 37
 //
 // NODE INDEX
@@ -92,12 +92,12 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 @workflow({
     id: 'DmaKVjkSXjdqbOnl',
-    name: 'Trustscan Company Contacts  Stage 2 - MA',
+    name: 'Trustscan Company Contacts - Stage 2',
     active: false,
     tags: ['Company Contacts'],
     settings: { executionOrder: 'v1', availableInMCP: false, binaryMode: 'separate' },
 })
-export class TrustscanCompanyContactsStage2MaWorkflow {
+export class TrustscanCompanyContactsStage2Workflow {
     // =====================================================================
     // CONFIGURATION DES NOEUDS
     // =====================================================================
@@ -1127,7 +1127,7 @@ return [{ json: { RUN_ID: String(item.RUN_ID || "").trim(), EntityKey: String(it
             parameters: [
                 {
                     name: 'Authorization',
-                    value: '',
+                    value: 'Bearer fc-bcb07136c3e64a7a8ab7c51dcf397568',
                 },
                 {
                     name: 'Content-Type',
@@ -1280,7 +1280,6 @@ return [{ json: {
             parameters: [
                 {
                     name: 'Authorization',
-                    value: '',
                 },
             ],
         },

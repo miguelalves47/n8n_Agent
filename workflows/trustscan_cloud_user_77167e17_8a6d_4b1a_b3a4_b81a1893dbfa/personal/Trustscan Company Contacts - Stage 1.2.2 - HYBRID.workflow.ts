@@ -1,7 +1,7 @@
 import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
-// Workflow : URL_DISCOVER_HYBRID
+// Workflow : Trustscan Company Contacts - Stage 1.2.2 - HYBRID
 // Nodes   : 25  |  Connections: 28
 //
 // NODE INDEX
@@ -72,11 +72,11 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 @workflow({
     id: 's2kskrjBoXoUh0fR',
-    name: 'URL_DISCOVER_HYBRID',
+    name: 'Trustscan Company Contacts - Stage 1.2.2 - HYBRID',
     active: false,
     settings: { executionOrder: 'v1', binaryMode: 'separate' },
 })
-export class UrlDiscoverHybridWorkflow {
+export class TrustscanCompanyContactsStage122HybridWorkflow {
     // =====================================================================
     // CONFIGURATION DES NOEUDS
     // =====================================================================
@@ -86,7 +86,7 @@ export class UrlDiscoverHybridWorkflow {
         name: 'Phase 1 Trigger',
         type: 'n8n-nodes-base.manualTrigger',
         version: 1,
-        position: [-1400, 0],
+        position: [-1408, 0],
     })
     Phase1Trigger = {};
 
@@ -95,7 +95,7 @@ export class UrlDiscoverHybridWorkflow {
         name: 'Read URL Checks',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [-1160, -100],
+        position: [-1168, -96],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     ReadUrlChecks = {
@@ -117,7 +117,7 @@ export class UrlDiscoverHybridWorkflow {
         name: 'Read Input Snapshot',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [-1160, 100],
+        position: [-1168, 112],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     ReadInputSnapshot = {
@@ -139,12 +139,10 @@ export class UrlDiscoverHybridWorkflow {
         name: 'Merge Reads',
         type: 'n8n-nodes-base.merge',
         version: 3.2,
-        position: [-1000, 0],
+        position: [-1008, 0],
     })
     MergeReads = {
         mode: 'chooseBranch',
-        chooseBranchMode: 'waitForAll',
-        output: 'specifiedInput',
         useDataOfInput: '1',
     };
 
@@ -153,7 +151,7 @@ export class UrlDiscoverHybridWorkflow {
         name: 'Join Filter Clean Name',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-840, 0],
+        position: [-848, 0],
     })
     JoinFilterCleanName = {
         jsCode: `// Inner-join URL_CHECKS (Response_class = NO_URL) with INPUT_SNAPSHOT, then
@@ -232,7 +230,7 @@ return out;
         name: 'Loop Over Entities',
         type: 'n8n-nodes-base.splitInBatches',
         version: 3,
-        position: [-640, 0],
+        position: [-656, -16],
     })
     LoopOverEntities = {
         options: {},
@@ -244,7 +242,7 @@ return out;
         name: 'Wait Before SerpAPI',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [-400, 0],
+        position: [-272, 0],
     })
     WaitBeforeSerpapi = {
         amount: 2,
@@ -255,7 +253,7 @@ return out;
         name: 'Search SerpAPI',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [-160, 0],
+        position: [-80, 0],
         credentials: { serpApi: { id: 'TPQCvbAqVDrs1oJp', name: 'SerpAPI account' } },
         onError: 'continueRegularOutput',
         alwaysOutputData: true,
@@ -302,9 +300,7 @@ return out;
         },
         options: {
             response: {
-                response: {
-                    fullResponse: false,
-                },
+                response: {},
             },
             timeout: 30000,
         },
@@ -316,7 +312,7 @@ return out;
         name: 'Wait Before OpenAI Search',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [80, 0],
+        position: [128, 0],
     })
     WaitBeforeOpenaiSearch = {
         amount: 1,
@@ -341,7 +337,6 @@ return out;
         authentication: 'predefinedCredentialType',
         nodeCredentialType: 'openAiApi',
         sendBody: true,
-        contentType: 'json',
         specifyBody: 'json',
         jsonBody: `={{ JSON.stringify({
   model: "gpt-4.1-mini",
@@ -382,9 +377,7 @@ return out;
 }) }}`,
         options: {
             response: {
-                response: {
-                    fullResponse: false,
-                },
+                response: {},
             },
             timeout: 60000,
         },
@@ -557,7 +550,6 @@ return [{
         authentication: 'predefinedCredentialType',
         nodeCredentialType: 'openAiApi',
         sendBody: true,
-        contentType: 'json',
         specifyBody: 'json',
         jsonBody: `={{ JSON.stringify({
   model: "gpt-4.1-mini",
@@ -593,9 +585,7 @@ return [{
 }) }}`,
         options: {
             response: {
-                response: {
-                    fullResponse: false,
-                },
+                response: {},
             },
             timeout: 60000,
         },
@@ -775,7 +765,7 @@ return [{
         name: 'Build Subpage URLs',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1520, -150],
+        position: [1520, -144],
     })
     BuildSubpageUrls = {
         jsCode: `const j = $input.first().json;
@@ -802,7 +792,7 @@ return paths.map(p => ({
         name: 'Fetch Page',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [1760, -150],
+        position: [1760, -144],
         onError: 'continueRegularOutput',
         retryOnFail: true,
         maxTries: 2,
@@ -836,8 +826,8 @@ return paths.map(p => ({
             },
             response: {
                 response: {
-                    responseFormat: 'text',
                     fullResponse: true,
+                    responseFormat: 'text',
                 },
             },
             timeout: 15000,
@@ -849,7 +839,7 @@ return paths.map(p => ({
         name: 'Validate NIF On Pages',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [2000, -150],
+        position: [2000, -144],
     })
     ValidateNifOnPages = {
         jsCode: `// Outcome ladder identical to URL_DISCOVER_OPENAI.
@@ -954,7 +944,7 @@ return [{
         name: 'Gate URL Acceptable',
         type: 'n8n-nodes-base.if',
         version: 2.2,
-        position: [2240, -150],
+        position: [2240, -144],
     })
     GateUrlAcceptable = {
         conditions: {
@@ -985,7 +975,7 @@ return [{
         name: 'Prep Failure (No Candidate)',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1520, 150],
+        position: [1520, 160],
     })
     PrepFailureNoCandidate = {
         jsCode: `const j = $input.first().json;
@@ -1007,7 +997,7 @@ return [{
         name: 'Wait Before Success Write',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [2480, -200],
+        position: [2480, -208],
     })
     WaitBeforeSuccessWrite = {
         amount: 2,
@@ -1019,7 +1009,7 @@ return [{
         name: 'Wait Before Failure Write',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [2480, 200],
+        position: [2480, 208],
     })
     WaitBeforeFailureWrite = {
         amount: 2,
@@ -1030,7 +1020,7 @@ return [{
         name: 'Upsert URL_CHECKS (Success)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [2720, -200],
+        position: [2720, -208],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         retryOnFail: true,
         maxTries: 5,
@@ -1075,7 +1065,7 @@ return [{
         name: 'Upsert URL_CHECKS (Failure)',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [2720, 200],
+        position: [2720, 208],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         retryOnFail: true,
         maxTries: 5,
@@ -1115,7 +1105,7 @@ return [{
         name: 'Mark Discovering Phase',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [-540, 0],
+        position: [-432, 0],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         retryOnFail: true,
         maxTries: 3,

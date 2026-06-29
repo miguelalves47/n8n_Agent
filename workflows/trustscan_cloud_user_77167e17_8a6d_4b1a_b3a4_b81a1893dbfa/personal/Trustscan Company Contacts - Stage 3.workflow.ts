@@ -1,7 +1,7 @@
 import { workflow, node, links } from '@n8n-as-code/transformer';
 
 // <workflow-map>
-// Workflow : STAGE 3 - Research
+// Workflow : Trustscan Company Contacts - Stage 3
 // Nodes   : 17  |  Connections: 19
 //
 // NODE INDEX
@@ -55,11 +55,11 @@ import { workflow, node, links } from '@n8n-as-code/transformer';
 
 @workflow({
     id: 'EtfFFrnxUDJ9cuxa',
-    name: 'STAGE 3 - Research',
+    name: 'Trustscan Company Contacts - Stage 3',
     active: false,
     settings: { executionOrder: 'v1', binaryMode: 'separate' },
 })
-export class Stage3ResearchWorkflow {
+export class TrustscanCompanyContactsStage3Workflow {
     // =====================================================================
     // CONFIGURATION DES NOEUDS
     // =====================================================================
@@ -69,7 +69,7 @@ export class Stage3ResearchWorkflow {
         name: 'Phase 1 Trigger',
         type: 'n8n-nodes-base.manualTrigger',
         version: 1,
-        position: [-1400, 0],
+        position: [-1408, 0],
     })
     Phase1Trigger = {};
 
@@ -78,7 +78,7 @@ export class Stage3ResearchWorkflow {
         name: 'Read URL Checks',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [-1160, -200],
+        position: [-1168, -208],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     ReadUrlChecks = {
@@ -100,7 +100,7 @@ export class Stage3ResearchWorkflow {
         name: 'Read CONTROL_EVIDENCE',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [-1160, 0],
+        position: [-1168, 0],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     ReadControlEvidence = {
@@ -122,7 +122,7 @@ export class Stage3ResearchWorkflow {
         name: 'Read Input Snapshot',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [-1160, 200],
+        position: [-1168, 208],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
     })
     ReadInputSnapshot = {
@@ -148,10 +148,8 @@ export class Stage3ResearchWorkflow {
     })
     MergeReads = {
         mode: 'chooseBranch',
-        chooseBranchMode: 'waitForAll',
-        output: 'specifiedInput',
-        useDataOfInput: '1',
         numberInputs: 3,
+        useDataOfInput: '1',
     };
 
     @node({
@@ -159,7 +157,7 @@ export class Stage3ResearchWorkflow {
         name: 'Compute Missing Fields',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [-760, 0],
+        position: [-768, 0],
     })
     ComputeMissingFields = {
         jsCode: `// Stage 3 input shaping:
@@ -169,8 +167,8 @@ export class Stage3ResearchWorkflow {
 //      If nothing is missing → skip (already complete).
 //   3. URL state determines (Source_url, Hint_url):
 //        live  (2XX, SUCCESS, URL_DISCOVERED, URL_LIKELY)        → Source_url = Final_url
-//        dead  (URL_FOUND_NOT_RESPONDING, 4XX, 5XX, TRANSPORT_ERROR) → Hint_url   = Final_url
-//        none  (NO_URL_FOUND, NO_URL, anything else)            → both empty
+//        dead  (URL_FINDED_NOT_RESPONDING, 4XX, 5XX, TRANSPORT_ERROR) → Hint_url   = Final_url
+//        none  (NO_URL_FINDED, NO_URL, anything else)            → both empty
 //   4. Inner-join INPUT_SNAPSHOT (NIPC + legal name); skip entities missing those.
 const urlChecks = $('Read URL Checks').all();
 const evidence  = $('Read CONTROL_EVIDENCE').all();
@@ -213,7 +211,7 @@ for (const it of evidence) {
 
 const ALL_FIELDS = ['email', 'phone', 'address'];
 const LIVE_CLASSES = new Set(['2XX', 'SUCCESS', 'URL_DISCOVERED', 'URL_LIKELY']);
-const DEAD_CLASSES = new Set(['URL_FOUND_NOT_RESPONDING', '4XX', '5XX', 'TRANSPORT_ERROR']);
+const DEAD_CLASSES = new Set(['URL_FINDED_NOT_RESPONDING', '4XX', '5XX', 'TRANSPORT_ERROR']);
 
 function urlStateFor(respClass, finalUrl) {
   if (LIVE_CLASSES.has(respClass) && finalUrl) return { sourceUrl: finalUrl, hintUrl: '',       state: 'live' };
@@ -307,7 +305,7 @@ return out;
         name: 'Loop Over Entities',
         type: 'n8n-nodes-base.splitInBatches',
         version: 3,
-        position: [-360, 0],
+        position: [-368, 0],
     })
     LoopOverEntities = {
         options: {},
@@ -319,7 +317,7 @@ return out;
         name: 'Wait Before SerpAPI',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [-160, 200],
+        position: [-160, 208],
     })
     WaitBeforeSerpapi = {
         amount: 2,
@@ -330,7 +328,7 @@ return out;
         name: 'Search SerpAPI',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [80, 200],
+        position: [80, 208],
         credentials: { serpApi: { id: 'TPQCvbAqVDrs1oJp', name: 'SerpAPI account' } },
         onError: 'continueRegularOutput',
         alwaysOutputData: true,
@@ -377,9 +375,7 @@ return out;
         },
         options: {
             response: {
-                response: {
-                    fullResponse: false,
-                },
+                response: {},
             },
             timeout: 30000,
         },
@@ -391,7 +387,7 @@ return out;
         name: 'Wait Before OpenAI',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [320, 200],
+        position: [320, 208],
     })
     WaitBeforeOpenai = {
         amount: 1,
@@ -402,7 +398,7 @@ return out;
         name: 'Search OpenAI',
         type: 'n8n-nodes-base.httpRequest',
         version: 4.4,
-        position: [560, 200],
+        position: [560, 208],
         credentials: { openAiApi: { id: '3m9rDHSTaM0KM3o5', name: 'OpenAi account' } },
         onError: 'continueRegularOutput',
         alwaysOutputData: true,
@@ -416,7 +412,6 @@ return out;
         authentication: 'predefinedCredentialType',
         nodeCredentialType: 'openAiApi',
         sendBody: true,
-        contentType: 'json',
         specifyBody: 'json',
         jsonBody: `={{ JSON.stringify({
   model: "gpt-4.1-mini",
@@ -460,9 +455,7 @@ return out;
 }) }}`,
         options: {
             response: {
-                response: {
-                    fullResponse: false,
-                },
+                response: {},
             },
             timeout: 60000,
         },
@@ -473,7 +466,7 @@ return out;
         name: 'Parse Stage 3 Results',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [800, 200],
+        position: [800, 208],
     })
     ParseStage3Results = {
         jsCode: `// Combine SerpAPI snippets + OpenAI parsed JSON. For each missing field:
@@ -668,7 +661,7 @@ return rows;
         name: 'Wait Before Phase 3 Write',
         type: 'n8n-nodes-base.wait',
         version: 1.1,
-        position: [1040, 200],
+        position: [1040, 208],
     })
     WaitBeforePhase3Write = {
         amount: 2,
@@ -679,7 +672,7 @@ return rows;
         name: 'Write Stage 3 Evidence',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.5,
-        position: [1280, 200],
+        position: [1280, 208],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         retryOnFail: true,
         maxTries: 5,
@@ -725,7 +718,7 @@ return rows;
         name: 'Dedupe Exec Update',
         type: 'n8n-nodes-base.code',
         version: 2,
-        position: [1400, 200],
+        position: [1472, 208],
     })
     DedupeExecUpdate = {
         jsCode: `// Collapse per-field rows back to a single item per loop iteration so the
@@ -739,7 +732,7 @@ return [{ json: $('Loop Over Entities').item.json }];
         name: 'Update Control Exec Done',
         type: 'n8n-nodes-base.googleSheets',
         version: 4.7,
-        position: [1620, 200],
+        position: [1664, 208],
         credentials: { googleSheetsOAuth2Api: { id: '0my7636ExgjsVAtQ', name: 'Google Sheets account' } },
         alwaysOutputData: true,
         retryOnFail: true,
